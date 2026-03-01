@@ -13,6 +13,7 @@ export interface TranscoderJob {
 	output_path: string | null;
 	total_tracks: number | null;
 	poster_url: string | null;
+	config_overrides: Record<string, unknown> | null;
 	created_at: string | null;
 	started_at: string | null;
 	completed_at: string | null;

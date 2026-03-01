@@ -65,6 +65,7 @@ export interface Job {
 	episode: string | null;
 	episode_auto: string | null;
 	episode_manual: string | null;
+	transcode_overrides: Record<string, unknown> | null;
 	ejected: boolean | null;
 	pid: number | null;
 	tracks_total: number | null;

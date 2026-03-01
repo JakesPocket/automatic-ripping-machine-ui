@@ -54,6 +54,7 @@ class Job(Base):
     path = Column(String(256))
     raw_path = Column(String(256))
     transcode_path = Column(String(256))
+    transcode_overrides = Column(Text)
     ejected = Column(Boolean)
     updated = Column(Boolean)
     pid = Column(Integer)

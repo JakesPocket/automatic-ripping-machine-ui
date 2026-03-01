@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from backend.models.schemas import (
     JobDetailSchema,
@@ -118,6 +118,21 @@ async def get_music_detail(release_id: str):
     if not result:
         raise HTTPException(status_code=404, detail="Release not found")
     return result
+
+
+@router.patch("/jobs/{job_id}/transcode-config")
+async def update_transcode_config(job_id: int, request: Request):
+    """Set per-job transcode override settings."""
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+    try:
+        result = arm_db.update_job_transcode_overrides(job_id, body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"success": True, "overrides": result}
 
 
 @router.post("/jobs/{job_id}/retranscode")

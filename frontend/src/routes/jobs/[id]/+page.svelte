@@ -9,6 +9,7 @@
 	import TitleSearch from '$lib/components/TitleSearch.svelte';
 	import MusicSearch from '$lib/components/MusicSearch.svelte';
 	import RipSettings from '$lib/components/RipSettings.svelte';
+	import TranscodeOverrides from '$lib/components/TranscodeOverrides.svelte';
 	import CrcLookup from '$lib/components/CrcLookup.svelte';
 	import InlineLogFeed from '$lib/components/InlineLogFeed.svelte';
 	import { formatDateTime, timeAgo } from '$lib/utils/format';
@@ -20,6 +21,7 @@
 	let showMusicSearch = $state(false);
 	let showCrcLookup = $state(false);
 	let showRipSettings = $state(false);
+	let showTranscodeOverrides = $state(false);
 	let retranscoding = $state(false);
 	let retranscodeFeedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -373,6 +375,34 @@
 						</button>
 					</div>
 					<RipSettings {job} config={job.config} isMusic={isMusicDisc} onsaved={handleConfigSaved} />
+				</section>
+			{/if}
+		{/if}
+
+		<!-- Transcode Overrides -->
+		{#if isVideoDisc}
+			{#if !showTranscodeOverrides}
+				<button
+					onclick={() => (showTranscodeOverrides = true)}
+					class="rounded-lg px-3 py-1.5 text-sm font-medium bg-primary/5 text-gray-700 ring-1 ring-primary/25 hover:bg-primary/10 dark:bg-primary/10 dark:text-gray-200 dark:ring-primary/30 dark:hover:bg-primary/15 transition-colors"
+				>
+					Transcode Settings
+				</button>
+			{:else}
+				<section class="rounded-lg border border-primary/20 p-4 dark:border-primary/20">
+					<div class="mb-3 flex items-center justify-between">
+						<h2 class="text-lg font-semibold text-gray-900 dark:text-white">Transcode Settings</h2>
+						<button
+							onclick={() => (showTranscodeOverrides = false)}
+							class="rounded-sm p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+							aria-label="Close transcode settings"
+						>
+							<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
+					<TranscodeOverrides {job} onsaved={loadJob} />
 				</section>
 			{/if}
 		{/if}

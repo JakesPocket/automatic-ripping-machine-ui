@@ -146,6 +146,16 @@ export function fetchJobProgress(id: number): Promise<RipProgress> {
 	return apiFetch<RipProgress>(`/api/jobs/${id}/progress`);
 }
 
+export function updateJobTranscodeConfig(
+	jobId: number,
+	overrides: Record<string, unknown>
+): Promise<{ success: boolean; overrides: Record<string, unknown> }> {
+	return apiFetch(`/api/jobs/${jobId}/transcode-config`, {
+		method: 'PATCH',
+		body: JSON.stringify(overrides)
+	});
+}
+
 export function retranscodeJob(id: number): Promise<{ status: string; message: string }> {
 	return apiFetch(`/api/jobs/${id}/retranscode`, { method: 'POST' });
 }

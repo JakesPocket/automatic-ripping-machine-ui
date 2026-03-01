@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 # --- ARM Job Schemas ---
@@ -66,6 +67,22 @@ class JobSchema(BaseModel):
     path: str | None = None
     raw_path: str | None = None
     transcode_path: str | None = None
+    transcode_overrides: dict | None = None
+
+    @field_validator("transcode_overrides", mode="before")
+    @classmethod
+    def _parse_transcode_overrides(cls, v: Any) -> dict | None:
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return None
+
     artist: str | None = None
     artist_auto: str | None = None
     artist_manual: str | None = None

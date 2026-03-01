@@ -7,6 +7,7 @@
 	import TitleSearch from './TitleSearch.svelte';
 	import MusicSearch from './MusicSearch.svelte';
 	import RipSettings from './RipSettings.svelte';
+	import TranscodeOverrides from './TranscodeOverrides.svelte';
 	import CrcLookup from './CrcLookup.svelte';
 	import DiscTypeIcon from './DiscTypeIcon.svelte';
 	import InlineLogFeed from './InlineLogFeed.svelte';
@@ -29,6 +30,7 @@
 	let showMusicSearch = $state(false);
 	let showCrcLookup = $state(false);
 	let showRipSettings = $state(false);
+	let showTranscodeSettings = $state(false);
 	let cancelling = $state(false);
 	let starting = $state(false);
 
@@ -157,22 +159,26 @@
 		loadDetail();
 	}
 
-	function toggleSection(section: 'info' | 'title' | 'music' | 'crc' | 'settings') {
+	function toggleSection(section: 'info' | 'title' | 'music' | 'crc' | 'settings' | 'transcode') {
+		const closeAll = () => { showInfo = false; showTitleSearch = false; showMusicSearch = false; showCrcLookup = false; showRipSettings = false; showTranscodeSettings = false; };
 		if (section === 'info') {
 			showInfo = !showInfo;
-			if (showInfo) { showTitleSearch = false; showMusicSearch = false; showCrcLookup = false; showRipSettings = false; }
+			if (showInfo) { closeAll(); showInfo = true; }
 		} else if (section === 'title') {
 			showTitleSearch = !showTitleSearch;
-			if (showTitleSearch) { showInfo = false; showMusicSearch = false; showCrcLookup = false; showRipSettings = false; }
+			if (showTitleSearch) { closeAll(); showTitleSearch = true; }
 		} else if (section === 'music') {
 			showMusicSearch = !showMusicSearch;
-			if (showMusicSearch) { showInfo = false; showTitleSearch = false; showCrcLookup = false; showRipSettings = false; }
+			if (showMusicSearch) { closeAll(); showMusicSearch = true; }
 		} else if (section === 'crc') {
 			showCrcLookup = !showCrcLookup;
-			if (showCrcLookup) { showInfo = false; showTitleSearch = false; showMusicSearch = false; showRipSettings = false; }
+			if (showCrcLookup) { closeAll(); showCrcLookup = true; }
+		} else if (section === 'transcode') {
+			showTranscodeSettings = !showTranscodeSettings;
+			if (showTranscodeSettings) { closeAll(); showTranscodeSettings = true; }
 		} else {
 			showRipSettings = !showRipSettings;
-			if (showRipSettings) { showInfo = false; showTitleSearch = false; showMusicSearch = false; showCrcLookup = false; }
+			if (showRipSettings) { closeAll(); showRipSettings = true; }
 		}
 	}
 
@@ -326,6 +332,16 @@
 		>
 			Rip Settings
 		</button>
+		{#if isVideo}
+			<button
+				onclick={() => toggleSection('transcode')}
+				class="{btnBase} {showTranscodeSettings
+					? 'bg-primary text-on-primary'
+					: 'bg-primary/5 text-gray-700 ring-1 ring-primary/25 hover:bg-primary/10 dark:bg-primary/10 dark:text-gray-200 dark:ring-primary/30 dark:hover:bg-primary/15'}"
+			>
+				Transcode
+			</button>
+		{/if}
 		<button
 			onclick={handleStart}
 			disabled={starting}
@@ -566,6 +582,12 @@
 	{:else if showRipSettings && initialLoading}
 		<div class="border-t border-primary/20 p-4 text-sm text-gray-400 dark:border-primary/20">
 			Loading config...
+		</div>
+	{/if}
+
+	{#if showTranscodeSettings && isVideo}
+		<div class="border-t border-primary/20 p-4 dark:border-primary/20">
+			<TranscodeOverrides {job} onsaved={handleConfigSaved} />
 		</div>
 	{/if}
 

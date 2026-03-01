@@ -32,7 +32,15 @@ def _engine():
     )
 
 
+def _rw_engine():
+    url = f"sqlite:///{settings.arm_db_path}"
+    return create_engine(
+        url, connect_args={"check_same_thread": False}, poolclass=NullPool
+    )
+
+
 _db_engine = None
+_db_rw_engine = None
 
 
 def get_engine():
@@ -42,8 +50,19 @@ def get_engine():
     return _db_engine
 
 
+def get_rw_engine():
+    global _db_rw_engine
+    if _db_rw_engine is None:
+        _db_rw_engine = _rw_engine()
+    return _db_rw_engine
+
+
 def get_session() -> Session:
     return Session(get_engine())
+
+
+def get_rw_session() -> Session:
+    return Session(get_rw_engine())
 
 
 def is_available() -> bool:
@@ -356,6 +375,15 @@ def get_job_retranscode_info(job_id: int) -> dict | None:
             title = job.title or job.title_auto or job.label or "Unknown"
             year = job.year or job.year_auto or ""
 
+            # Parse transcode overrides if present
+            config_overrides = None
+            if getattr(job, 'transcode_overrides', None):
+                import json as _json
+                try:
+                    config_overrides = _json.loads(job.transcode_overrides)
+                except (ValueError, TypeError):
+                    pass
+
             return {
                 "title": title,
                 "body": f"{title} ({year})" if year else title,
@@ -366,7 +394,58 @@ def get_job_retranscode_info(job_id: int) -> dict | None:
                 "year": year,
                 "disctype": job.disctype,
                 "poster_url": job.poster_url or job.poster_url_auto or "",
+                "config_overrides": config_overrides,
             }
     except Exception:
         log.exception("Failed to get retranscode info for job %s", job_id)
         return None
+
+
+TRANSCODE_OVERRIDE_KEYS = {
+    "video_encoder", "video_quality", "audio_encoder", "subtitle_mode",
+    "handbrake_preset", "handbrake_preset_4k", "handbrake_preset_dvd",
+    "handbrake_preset_file", "delete_source", "output_extension",
+}
+
+
+def update_job_transcode_overrides(job_id: int, overrides: dict) -> dict | None:
+    """Validate and store per-job transcode overrides.
+
+    Returns the validated overrides dict, or None if the job doesn't exist.
+    """
+    import json as _json
+
+    # Validate keys
+    invalid = set(overrides.keys()) - TRANSCODE_OVERRIDE_KEYS
+    if invalid:
+        raise ValueError(f"Unknown keys: {', '.join(sorted(invalid))}")
+
+    # Type coercion
+    clean = {}
+    for key, value in overrides.items():
+        if value is None or value == "":
+            continue
+        if key == "video_quality":
+            clean[key] = int(value)
+        elif key == "delete_source":
+            if isinstance(value, bool):
+                clean[key] = value
+            elif isinstance(value, str):
+                clean[key] = value.lower() in ("true", "1", "yes")
+            else:
+                clean[key] = bool(value)
+        else:
+            clean[key] = str(value)
+
+    try:
+        with get_rw_session() as session:
+            stmt = select(Job).where(Job.job_id == job_id)
+            job = session.scalars(stmt).unique().first()
+            if not job:
+                return None
+            job.transcode_overrides = _json.dumps(clean) if clean else None
+            session.commit()
+            return clean
+    except Exception:
+        log.exception("Failed to update transcode overrides for job %s", job_id)
+        raise
