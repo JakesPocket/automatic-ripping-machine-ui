@@ -22,8 +22,11 @@
 	// Selection state
 	let selectedPaths = $state(new Set<string>());
 
-	// Delete confirmation
+	// Delete confirmation (single item)
 	let deleteDialog = $state({ open: false, path: '', name: '' });
+
+	// Bulk delete confirmation
+	let bulkDeleteOpen = $state(false);
 
 	// Move dialog — browsable directory picker
 	let moveDialogOpen = $state(false);
@@ -230,6 +233,29 @@
 		await navigate(currentPath);
 	}
 
+	// --- Bulk delete ---
+	async function confirmBulkDelete() {
+		let deleted = 0;
+		let failed = 0;
+		for (const path of selectedPaths) {
+			try {
+				await deleteFile(path);
+				deleted++;
+			} catch {
+				failed++;
+			}
+		}
+		bulkDeleteOpen = false;
+		selectedPaths = new Set();
+		if (failed > 0) {
+			feedback = { type: 'error', message: `Deleted ${deleted}, failed ${failed}` };
+		} else {
+			feedback = { type: 'success', message: `Deleted ${deleted} item${deleted !== 1 ? 's' : ''}` };
+		}
+		clearFeedback();
+		await navigate(currentPath);
+	}
+
 	// --- New folder ---
 	function startNewFolder() {
 		newFolderName = '';
@@ -298,19 +324,21 @@
 
 	<!-- Root tabs -->
 	{#if roots.length > 0}
-		<div class="flex gap-1 rounded-lg border border-primary/20 bg-surface p-1 dark:border-primary/20 dark:bg-surface-dark">
-			{#each roots as root}
-				<button
-					type="button"
-					onclick={() => navigate(root.path)}
-					class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors
-						{currentPath.startsWith(root.path)
-							? 'bg-primary text-on-primary dark:bg-primary-dark'
-							: 'text-gray-600 hover:bg-primary/10 dark:text-gray-400 dark:hover:bg-primary/15'}"
-				>
-					{root.label}
-				</button>
-			{/each}
+		<div class="border-b border-primary/20 dark:border-primary/20">
+			<nav class="-mb-px flex gap-4" aria-label="File root tabs">
+				{#each roots as root}
+					<button
+						type="button"
+						onclick={() => navigate(root.path)}
+						class="whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors
+							{currentPath.startsWith(root.path)
+								? 'border-primary text-primary-text dark:border-primary-text-dark dark:text-primary-text-dark'
+								: 'border-transparent text-gray-500 hover:border-primary/30 hover:text-gray-700 dark:text-gray-400 dark:hover:border-primary/30 dark:hover:text-gray-300'}"
+					>
+						{root.label}
+					</button>
+				{/each}
+			</nav>
 		</div>
 	{/if}
 
@@ -330,6 +358,16 @@
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
 						</svg>
 						Move {selectedPaths.size}
+					</button>
+					<button
+						type="button"
+						onclick={() => (bulkDeleteOpen = true)}
+						class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+						</svg>
+						Delete {selectedPaths.size}
 					</button>
 				{/if}
 				<!-- New folder -->
@@ -477,6 +515,17 @@
 	variant="danger"
 	onconfirm={confirmDelete}
 	oncancel={() => (deleteDialog = { open: false, path: '', name: '' })}
+/>
+
+<!-- Bulk delete confirmation -->
+<ConfirmDialog
+	open={bulkDeleteOpen}
+	title="Delete {selectedPaths.size} item{selectedPaths.size !== 1 ? 's' : ''}"
+	message="This will permanently delete {selectedPaths.size} selected item{selectedPaths.size !== 1 ? 's' : ''}, including all contents of any folders. This cannot be undone."
+	confirmLabel="Delete All"
+	variant="danger"
+	onconfirm={confirmBulkDelete}
+	oncancel={() => (bulkDeleteOpen = false)}
 />
 
 <!-- Bulk move dialog — browsable directory picker -->
