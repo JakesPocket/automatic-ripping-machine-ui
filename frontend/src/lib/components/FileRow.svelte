@@ -113,7 +113,7 @@
 
 	<!-- Size -->
 	<td class="px-3 py-2 text-right text-sm text-gray-500 dark:text-gray-400">
-		{entry.type === 'file' ? formatBytes(entry.size) : '--'}
+		{entry.size ? formatBytes(entry.size) : '--'}
 	</td>
 
 	<!-- Modified -->
