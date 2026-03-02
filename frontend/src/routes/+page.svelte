@@ -49,7 +49,10 @@
 	let waitingJobs = $derived(
 		dash.active_jobs.filter(j => j.status?.toLowerCase() === 'waiting' && !dismissedJobIds.has(j.job_id))
 	);
-	let nonWaitingActiveJobs = $derived(dash.active_jobs.filter(j => j.status?.toLowerCase() !== 'waiting'));
+	let nonWaitingActiveJobs = $derived(dash.active_jobs.filter(j => {
+		const s = j.status?.toLowerCase();
+		return s !== 'waiting' && s !== 'transcoding' && s !== 'waiting_transcode';
+	}));
 
 	let progressMap = $state<Record<number, RipProgress>>({});
 

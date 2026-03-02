@@ -237,3 +237,38 @@ async def test_metadata_key() -> dict[str, Any]:
     resp = await get_client().get("/api/v1/metadata/test-key")
     resp.raise_for_status()
     return resp.json()
+
+
+# ---------------------------------------------------------------------------
+# File browser proxy — ARM has direct filesystem access
+# ---------------------------------------------------------------------------
+
+
+async def get_file_roots() -> list[dict[str, Any]] | None:
+    """Fetch configured media root directories. Returns None if ARM is unreachable."""
+    return await _request("GET", "/api/v1/files/roots")
+
+
+async def list_files(path: str) -> dict[str, Any] | None:
+    """List directory contents. Returns None if ARM is unreachable."""
+    return await _request("GET", "/api/v1/files/list", params={"path": path})
+
+
+async def rename_file(path: str, new_name: str) -> dict[str, Any] | None:
+    """Rename a file or directory. Returns None if ARM is unreachable."""
+    return await _request("POST", "/api/v1/files/rename", json={"path": path, "new_name": new_name})
+
+
+async def move_file(path: str, destination: str) -> dict[str, Any] | None:
+    """Move a file or directory. Returns None if ARM is unreachable."""
+    return await _request("POST", "/api/v1/files/move", json={"path": path, "destination": destination})
+
+
+async def create_directory(path: str, name: str) -> dict[str, Any] | None:
+    """Create a new directory. Returns None if ARM is unreachable."""
+    return await _request("POST", "/api/v1/files/mkdir", json={"path": path, "name": name})
+
+
+async def delete_file(path: str) -> dict[str, Any] | None:
+    """Delete a file or directory. Returns None if ARM is unreachable."""
+    return await _request("DELETE", "/api/v1/files/delete", json={"path": path})

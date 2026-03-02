@@ -1,0 +1,586 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { fetchRoots, fetchDirectory, renameFile, moveFile, deleteFile, createDirectory } from '$lib/api/files';
+	import type { FileRoot, DirectoryListing, FileEntry } from '$lib/types/files';
+	import { formatBytes, formatDateTime } from '$lib/utils/format';
+	import FileIcon from '$lib/components/FileIcon.svelte';
+	import BreadcrumbNav from '$lib/components/BreadcrumbNav.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import FileRow from '$lib/components/FileRow.svelte';
+
+	let roots = $state<FileRoot[]>([]);
+	let currentPath = $state<string>('');
+	let listing = $state<DirectoryListing | null>(null);
+	let loading = $state(true);
+	let error = $state<string | null>(null);
+	let feedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
+
+	// Sort state
+	let sortKey = $state<'name' | 'size' | 'modified'>('name');
+	let sortDir = $state<'asc' | 'desc'>('asc');
+
+	// Selection state
+	let selectedPaths = $state(new Set<string>());
+
+	// Delete confirmation
+	let deleteDialog = $state({ open: false, path: '', name: '' });
+
+	// Move dialog — browsable directory picker
+	let moveDialogOpen = $state(false);
+	let pickerPath = $state('');
+	let pickerListing = $state<DirectoryListing | null>(null);
+	let pickerLoading = $state(false);
+	let pickerRoot = $state('');  // the root path this picker is scoped to
+
+	// New folder
+	let creatingFolder = $state(false);
+	let newFolderName = $state('');
+
+	let sortedEntries = $derived.by(() => {
+		if (!listing) return [];
+		return [...listing.entries].sort((a, b) => {
+			if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+			let cmp: number;
+			if (sortKey === 'size') {
+				cmp = a.size - b.size;
+			} else if (sortKey === 'modified') {
+				cmp = a.modified.localeCompare(b.modified);
+			} else {
+				cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+			}
+			return sortDir === 'asc' ? cmp : -cmp;
+		});
+	});
+
+	// Subfolders in the picker (excluding items being moved)
+	let pickerFolders = $derived.by(() => {
+		if (!pickerListing) return [];
+		const selectedNames = new Set([...selectedPaths].map(p => p.split('/').pop()!));
+		return pickerListing.entries.filter(
+			e => e.type === 'directory' && !selectedNames.has(e.name)
+		);
+	});
+
+	// Can we go up from picker? Only if not already at the root
+	let pickerCanGoUp = $derived(pickerPath !== pickerRoot && pickerListing?.parent != null);
+
+	let allSelected = $derived(
+		sortedEntries.length > 0 && sortedEntries.every(e => selectedPaths.has(listing!.path + '/' + e.name))
+	);
+
+	function toggleSort(key: 'name' | 'size' | 'modified') {
+		if (sortKey === key) {
+			sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortKey = key;
+			sortDir = key === 'modified' ? 'desc' : 'asc';
+		}
+	}
+
+	function sortIcon(key: string): string {
+		if (sortKey !== key) return '';
+		return sortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+	}
+
+	function clearFeedback() {
+		setTimeout(() => (feedback = null), 3000);
+	}
+
+	function toggleSelect(path: string) {
+		const next = new Set(selectedPaths);
+		if (next.has(path)) next.delete(path);
+		else next.add(path);
+		selectedPaths = next;
+	}
+
+	function toggleSelectAll() {
+		if (!listing) return;
+		if (allSelected) {
+			selectedPaths = new Set();
+		} else {
+			selectedPaths = new Set(sortedEntries.map(e => listing!.path + '/' + e.name));
+		}
+	}
+
+	async function loadRoots() {
+		try {
+			roots = await fetchRoots();
+			if (roots.length > 0 && !currentPath) {
+				currentPath = roots[0].path;
+			}
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load roots';
+		}
+	}
+
+	async function navigate(path: string) {
+		loading = true;
+		error = null;
+		currentPath = path;
+		selectedPaths = new Set();
+		try {
+			listing = await fetchDirectory(path);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load directory';
+			listing = null;
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function handleRename(path: string, newName: string) {
+		try {
+			await renameFile(path, newName);
+			feedback = { type: 'success', message: `Renamed to ${newName}` };
+			clearFeedback();
+			await navigate(currentPath);
+		} catch (e) {
+			feedback = { type: 'error', message: e instanceof Error ? e.message : 'Rename failed' };
+			clearFeedback();
+		}
+	}
+
+	function handleDeleteRequest(path: string, name: string) {
+		deleteDialog = { open: true, path, name };
+	}
+
+	async function confirmDelete() {
+		try {
+			await deleteFile(deleteDialog.path);
+			feedback = { type: 'success', message: `Deleted ${deleteDialog.name}` };
+			clearFeedback();
+			deleteDialog = { open: false, path: '', name: '' };
+			await navigate(currentPath);
+		} catch (e) {
+			feedback = { type: 'error', message: e instanceof Error ? e.message : 'Delete failed' };
+			clearFeedback();
+		}
+	}
+
+	// --- Bulk move with browsable picker ---
+	async function openMoveDialog() {
+		if (selectedPaths.size === 0) return;
+		// Determine which root the current path belongs to
+		const root = roots.find(r => currentPath === r.path || currentPath.startsWith(r.path + '/'));
+		if (!root) return;
+		pickerRoot = root.path;
+		pickerPath = currentPath;
+		moveDialogOpen = true;
+		await loadPickerPath(currentPath);
+	}
+
+	async function loadPickerPath(path: string) {
+		pickerLoading = true;
+		try {
+			pickerListing = await fetchDirectory(path);
+			pickerPath = path;
+		} catch {
+			// stay on current listing
+		} finally {
+			pickerLoading = false;
+		}
+	}
+
+	async function pickerNavigate(path: string) {
+		await loadPickerPath(path);
+	}
+
+	async function pickerGoUp() {
+		if (pickerListing?.parent && pickerPath !== pickerRoot) {
+			await loadPickerPath(pickerListing.parent);
+		}
+	}
+
+	function closeMoveDialog() {
+		moveDialogOpen = false;
+		pickerListing = null;
+	}
+
+	function pickerRelativePath(): string {
+		if (!pickerPath || !pickerRoot) return '';
+		if (pickerPath === pickerRoot) {
+			const root = roots.find(r => r.path === pickerRoot);
+			return root ? root.label : '/';
+		}
+		const root = roots.find(r => r.path === pickerRoot);
+		const prefix = root ? root.label : '';
+		return prefix + '/' + pickerPath.slice(pickerRoot.length + 1);
+	}
+
+	async function confirmBulkMove() {
+		if (!pickerPath) return;
+		let moved = 0;
+		let failed = 0;
+		for (const path of selectedPaths) {
+			try {
+				await moveFile(path, pickerPath);
+				moved++;
+			} catch {
+				failed++;
+			}
+		}
+		closeMoveDialog();
+		selectedPaths = new Set();
+		if (failed > 0) {
+			feedback = { type: 'error', message: `Moved ${moved}, failed ${failed}` };
+		} else {
+			feedback = { type: 'success', message: `Moved ${moved} item${moved !== 1 ? 's' : ''}` };
+		}
+		clearFeedback();
+		await navigate(currentPath);
+	}
+
+	// --- New folder ---
+	function startNewFolder() {
+		newFolderName = '';
+		creatingFolder = true;
+	}
+
+	async function confirmNewFolder() {
+		if (!newFolderName.trim() || !currentPath) return;
+		try {
+			await createDirectory(currentPath, newFolderName.trim());
+			feedback = { type: 'success', message: `Created folder "${newFolderName.trim()}"` };
+			clearFeedback();
+			creatingFolder = false;
+			newFolderName = '';
+			await navigate(currentPath);
+		} catch (e) {
+			feedback = { type: 'error', message: e instanceof Error ? e.message : 'Failed to create folder' };
+			clearFeedback();
+		}
+	}
+
+	function cancelNewFolder() {
+		creatingFolder = false;
+		newFolderName = '';
+	}
+
+	function handleNewFolderKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') confirmNewFolder();
+		if (e.key === 'Escape') cancelNewFolder();
+	}
+
+	onMount(async () => {
+		await loadRoots();
+		if (currentPath) {
+			await navigate(currentPath);
+		} else {
+			loading = false;
+		}
+	});
+</script>
+
+<svelte:head>
+	<title>ARM - Files</title>
+</svelte:head>
+
+<div class="space-y-4">
+	<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Files</h1>
+
+	<!-- Feedback toast -->
+	{#if feedback}
+		<div
+			class="rounded-lg border px-4 py-2 text-sm {feedback.type === 'success'
+				? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400'
+				: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400'}"
+		>
+			{feedback.message}
+		</div>
+	{/if}
+
+	<!-- Error -->
+	{#if error}
+		<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+			{error}
+		</div>
+	{/if}
+
+	<!-- Root tabs -->
+	{#if roots.length > 0}
+		<div class="flex gap-1 rounded-lg border border-primary/20 bg-surface p-1 dark:border-primary/20 dark:bg-surface-dark">
+			{#each roots as root}
+				<button
+					type="button"
+					onclick={() => navigate(root.path)}
+					class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors
+						{currentPath.startsWith(root.path)
+							? 'bg-primary text-on-primary dark:bg-primary-dark'
+							: 'text-gray-600 hover:bg-primary/10 dark:text-gray-400 dark:hover:bg-primary/15'}"
+				>
+					{root.label}
+				</button>
+			{/each}
+		</div>
+	{/if}
+
+	<!-- Breadcrumb + toolbar row -->
+	{#if currentPath && roots.length > 0}
+		<div class="flex items-center justify-between gap-3">
+			<BreadcrumbNav path={currentPath} {roots} onnavigate={navigate} />
+			<div class="flex shrink-0 items-center gap-1">
+				<!-- Bulk move (visible when items selected) -->
+				{#if selectedPaths.size > 0}
+					<button
+						type="button"
+						onclick={openMoveDialog}
+						class="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-on-primary hover:bg-primary/90"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+						</svg>
+						Move {selectedPaths.size}
+					</button>
+				{/if}
+				<!-- New folder -->
+				<button
+					type="button"
+					onclick={startNewFolder}
+					class="rounded-lg p-2 text-gray-500 hover:bg-primary/10 dark:text-gray-400 dark:hover:bg-primary/15"
+					title="New folder"
+				>
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+					</svg>
+				</button>
+				<!-- Refresh -->
+				<button
+					type="button"
+					onclick={() => navigate(currentPath)}
+					disabled={loading}
+					class="rounded-lg p-2 text-gray-500 hover:bg-primary/10 dark:text-gray-400 dark:hover:bg-primary/15 disabled:opacity-50"
+					title="Refresh"
+				>
+					<svg class="h-5 w-5" class:animate-spin={loading} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+					</svg>
+				</button>
+			</div>
+		</div>
+	{/if}
+
+	<!-- File listing -->
+	{#if loading && !listing}
+		<div class="flex items-center justify-center rounded-lg border border-primary/20 bg-surface p-12 dark:border-primary/20 dark:bg-surface-dark">
+			<svg class="mr-2 h-5 w-5 animate-spin text-gray-500" viewBox="0 0 24 24">
+				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+			</svg>
+			<span class="text-gray-500 dark:text-gray-400">Loading...</span>
+		</div>
+	{:else if listing}
+		<div class="overflow-hidden rounded-lg border border-primary/20 bg-surface dark:border-primary/20 dark:bg-surface-dark">
+			{#if listing.parent}
+				<button
+					type="button"
+					onclick={() => listing?.parent && navigate(listing.parent)}
+					class="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700/50 dark:text-gray-400 dark:hover:bg-gray-800/50"
+				>
+					<span class="w-10"></span>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+					</svg>
+					..
+				</button>
+			{/if}
+
+			<!-- Inline new folder row -->
+			{#if creatingFolder}
+				<div class="flex items-center gap-2 border-b border-gray-100 bg-primary/5 px-3 py-2 dark:border-gray-700/50 dark:bg-primary/10">
+					<span class="w-10"></span>
+					<svg class="h-5 w-5 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+					</svg>
+					<input
+						type="text"
+						bind:value={newFolderName}
+						onkeydown={handleNewFolderKeydown}
+						placeholder="Folder name"
+						class="flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+					/>
+					<button type="button" onclick={confirmNewFolder} class="rounded p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20" title="Create">
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+						</svg>
+					</button>
+					<button type="button" onclick={cancelNewFolder} class="rounded p-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" title="Cancel">
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+			{/if}
+
+			{#if sortedEntries.length === 0 && !creatingFolder}
+				<div class="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+					This directory is empty
+				</div>
+			{:else if sortedEntries.length > 0}
+				<table class="w-full">
+					<thead>
+						<tr class="border-b border-gray-200 text-left text-xs font-medium uppercase text-gray-500 dark:border-gray-700 dark:text-gray-400">
+							<th class="w-10 px-3 py-2">
+								<input
+									type="checkbox"
+									checked={allSelected}
+									onchange={toggleSelectAll}
+									class="h-4 w-4 rounded border-gray-300 text-primary accent-primary dark:border-gray-600"
+								/>
+							</th>
+							<th class="px-3 py-2">
+								<button type="button" onclick={() => toggleSort('name')} class="hover:text-gray-700 dark:hover:text-gray-300">
+									Name{sortIcon('name')}
+								</button>
+							</th>
+							<th class="px-3 py-2 text-right">
+								<button type="button" onclick={() => toggleSort('size')} class="hover:text-gray-700 dark:hover:text-gray-300">
+									Size{sortIcon('size')}
+								</button>
+							</th>
+							<th class="hidden px-3 py-2 md:table-cell">
+								<button type="button" onclick={() => toggleSort('modified')} class="hover:text-gray-700 dark:hover:text-gray-300">
+									Modified{sortIcon('modified')}
+								</button>
+							</th>
+							<th class="px-3 py-2 text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each sortedEntries as entry (entry.name)}
+							<FileRow
+								{entry}
+								currentPath={listing.path}
+								selected={selectedPaths.has(listing.path + '/' + entry.name)}
+								onnavigate={navigate}
+								onrename={handleRename}
+								ondelete={handleDeleteRequest}
+								ontoggle={toggleSelect}
+							/>
+						{/each}
+					</tbody>
+				</table>
+			{/if}
+		</div>
+	{:else if !error}
+		<div class="rounded-lg border border-primary/20 bg-surface p-8 text-center dark:border-primary/20 dark:bg-surface-dark">
+			<p class="text-gray-500 dark:text-gray-400">No media directories configured</p>
+		</div>
+	{/if}
+</div>
+
+<!-- Delete confirmation -->
+<ConfirmDialog
+	open={deleteDialog.open}
+	title="Delete {deleteDialog.name}"
+	message="Are you sure you want to delete '{deleteDialog.name}'? This action cannot be undone."
+	confirmLabel="Delete"
+	variant="danger"
+	onconfirm={confirmDelete}
+	oncancel={() => (deleteDialog = { open: false, path: '', name: '' })}
+/>
+
+<!-- Bulk move dialog — browsable directory picker -->
+{#if moveDialogOpen}
+	<div class="fixed inset-0 z-50 flex items-center justify-center">
+		<button
+			type="button"
+			class="absolute inset-0 bg-black/50"
+			aria-label="Close dialog"
+			onclick={closeMoveDialog}
+		></button>
+		<div class="relative z-10 flex w-full max-w-lg flex-col rounded-lg bg-surface shadow-xl dark:bg-surface-dark" style="max-height: 80vh;">
+			<!-- Header -->
+			<div class="shrink-0 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+					Move {selectedPaths.size} item{selectedPaths.size !== 1 ? 's' : ''}
+				</h3>
+				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+					Browse to the destination folder
+				</p>
+			</div>
+
+			<!-- Current picker location -->
+			<div class="shrink-0 border-b border-gray-100 bg-gray-50 px-6 py-2 dark:border-gray-700/50 dark:bg-gray-800/50">
+				<div class="flex items-center gap-2 text-sm">
+					<svg class="h-4 w-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+					</svg>
+					<span class="font-medium text-gray-900 dark:text-white">{pickerRelativePath()}</span>
+					{#if pickerPath === currentPath}
+						<span class="rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">current</span>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Folder list (scrollable) -->
+			<div class="min-h-0 flex-1 overflow-y-auto">
+				{#if pickerLoading}
+					<div class="flex items-center justify-center p-8">
+						<svg class="mr-2 h-5 w-5 animate-spin text-gray-400" viewBox="0 0 24 24">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+						</svg>
+					</div>
+				{:else}
+					<!-- Go up -->
+					{#if pickerCanGoUp}
+						<button
+							type="button"
+							onclick={pickerGoUp}
+							class="flex w-full items-center gap-3 border-b border-gray-100 px-6 py-2.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700/50 dark:text-gray-400 dark:hover:bg-gray-800/50"
+						>
+							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+							</svg>
+							..
+						</button>
+					{/if}
+
+					{#if pickerFolders.length === 0 && !pickerCanGoUp}
+						<div class="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+							No subfolders
+						</div>
+					{/if}
+
+					{#each pickerFolders as folder (folder.name)}
+						<button
+							type="button"
+							onclick={() => pickerNavigate(pickerPath + '/' + folder.name)}
+							class="flex w-full items-center gap-3 border-b border-gray-100 px-6 py-2.5 text-sm text-gray-900 hover:bg-primary/5 dark:border-gray-700/50 dark:text-white dark:hover:bg-primary/10"
+						>
+							<svg class="h-5 w-5 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+							</svg>
+							{folder.name}
+							<svg class="ml-auto h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+							</svg>
+						</button>
+					{/each}
+				{/if}
+			</div>
+
+			<!-- Footer -->
+			<div class="shrink-0 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+				<div class="flex justify-end gap-3">
+					<button
+						type="button"
+						onclick={closeMoveDialog}
+						class="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+					>
+						Cancel
+					</button>
+					<button
+						type="button"
+						onclick={confirmBulkMove}
+						disabled={pickerPath === currentPath}
+						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:bg-primary/90 disabled:opacity-50"
+						title={pickerPath === currentPath ? 'Navigate to a different folder first' : ''}
+					>
+						Move here
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}

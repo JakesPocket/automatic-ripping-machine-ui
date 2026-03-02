@@ -12,6 +12,7 @@ from backend.routers import (
     arm_actions,
     dashboard,
     drives,
+    files,
     jobs,
     logs,
     notifications,
@@ -51,6 +52,7 @@ app.include_router(drives.router)
 app.include_router(logs.router)
 app.include_router(settings.router)
 app.include_router(notifications.router)
+app.include_router(files.router)
 
 # Serve static frontend build if it exists
 static_dir = Path(__file__).parent.parent / "frontend" / "build"
