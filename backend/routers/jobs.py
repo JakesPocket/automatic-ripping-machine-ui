@@ -101,10 +101,10 @@ async def get_media_detail(imdb_id: str):
     try:
         result = await arm_client.get_media_detail(imdb_id)
     except httpx.HTTPStatusError as exc:
-        log.warning("Metadata detail failed for %s: %d", imdb_id, exc.response.status_code)
+        log.warning("Metadata detail failed: %d", exc.response.status_code)
         raise HTTPException(status_code=exc.response.status_code, detail="Metadata detail failed")
-    except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError) as exc:
-        log.error("Metadata detail unreachable for %s: %s", imdb_id, exc)
+    except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError):
+        log.error("Metadata detail unreachable")
         raise HTTPException(status_code=502, detail="ARM service unreachable")
     if not result:
         raise HTTPException(status_code=404, detail="Title not found")
@@ -129,10 +129,10 @@ async def search_music_metadata(
             country=country, status=status, tracks=tracks, offset=offset,
         )
     except httpx.HTTPStatusError as exc:
-        log.warning("Music search failed for q=%r: %d", q, exc.response.status_code)
+        log.warning("Music search failed: %d", exc.response.status_code)
         raise HTTPException(status_code=exc.response.status_code, detail="Music search failed")
-    except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError) as exc:
-        log.error("Music search unreachable for q=%r: %s", q, exc)
+    except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError):
+        log.error("Music search unreachable")
         raise HTTPException(status_code=502, detail="ARM service unreachable")
 
 
@@ -142,10 +142,10 @@ async def get_music_detail(release_id: str):
     try:
         result = await arm_client.get_music_detail(release_id)
     except httpx.HTTPStatusError as exc:
-        log.warning("Music detail failed for %s: %d", release_id, exc.response.status_code)
+        log.warning("Music detail failed: %d", exc.response.status_code)
         raise HTTPException(status_code=exc.response.status_code, detail="Music detail failed")
-    except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError) as exc:
-        log.error("Music detail unreachable for %s: %s", release_id, exc)
+    except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError):
+        log.error("Music detail unreachable")
         raise HTTPException(status_code=502, detail="ARM service unreachable")
     if not result:
         raise HTTPException(status_code=404, detail="Release not found")
