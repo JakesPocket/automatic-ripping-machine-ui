@@ -51,6 +51,10 @@
 	let infoSaving = $state(false);
 	let infoFeedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
 
+	// Track which fields the user has manually edited to avoid
+	// overwriting their changes when the job prop updates from polling
+	let touched = $state<Record<string, boolean>>({});
+
 	let infoDirty = $derived(
 		infoTitle !== (job.title || '') ||
 		infoYear !== (job.year || '') ||
@@ -65,6 +69,24 @@
 		infoSeason !== (job.season || '') ||
 		infoEpisode !== (job.episode || '')
 	);
+
+	// Keep editable fields in sync with the job prop as the backend
+	// detects metadata (title, year, poster, etc.) during disc identification.
+	// Only sync fields the user hasn't manually edited.
+	$effect.pre(() => {
+		if (!touched.title) infoTitle = job.title || '';
+		if (!touched.year) infoYear = job.year || '';
+		if (!touched.type) infoType = job.video_type || '';
+		if (!touched.imdbId) infoImdbId = job.imdb_id || '';
+		if (!touched.posterUrl) infoPosterUrl = job.poster_url || '';
+		if (!touched.path) infoPath = job.path || '';
+		if (!touched.disctype) infoDisctype = job.disctype || '';
+		if (!touched.label) infoLabel = job.label || '';
+		if (!touched.artist) infoArtist = job.artist || '';
+		if (!touched.album) infoAlbum = job.album || '';
+		if (!touched.season) infoSeason = job.season || '';
+		if (!touched.episode) infoEpisode = job.episode || '';
+	});
 
 	async function saveInfo() {
 		infoSaving = true;
@@ -85,6 +107,7 @@
 				episode: infoEpisode.trim() || undefined,
 			});
 			infoFeedback = { type: 'success', message: 'Saved' };
+			touched = {};
 			onrefresh?.();
 		} catch (e) {
 			infoFeedback = { type: 'error', message: e instanceof Error ? e.message : 'Save failed' };
@@ -119,6 +142,7 @@
 	}
 
 	function handleTitleApply() {
+		touched = {};
 		onrefresh?.();
 		loadDetail();
 	}
@@ -155,6 +179,7 @@
 	}
 
 	function handleCrcApply() {
+		touched = {};
 		onrefresh?.();
 		loadDetail();
 	}
@@ -383,17 +408,17 @@
 					<div class="space-y-2">
 						<label class="block">
 							<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Title</span>
-							<input type="text" bind:value={infoTitle} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+							<input type="text" bind:value={infoTitle} oninput={() => { touched.title = true; }} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 						</label>
 						{#if isMusic}
 							<div class="grid grid-cols-2 gap-3">
 								<label>
 									<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Artist</span>
-									<input type="text" bind:value={infoArtist} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+									<input type="text" bind:value={infoArtist} oninput={() => { touched.artist = true; }} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 								</label>
 								<label>
 									<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Album</span>
-									<input type="text" bind:value={infoAlbum} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+									<input type="text" bind:value={infoAlbum} oninput={() => { touched.album = true; }} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 								</label>
 							</div>
 						{/if}
@@ -401,11 +426,11 @@
 							<div class="grid grid-cols-2 gap-3">
 								<label>
 									<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Season</span>
-									<input type="text" bind:value={infoSeason} placeholder="1" class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+									<input type="text" bind:value={infoSeason} oninput={() => { touched.season = true; }} placeholder="1" class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 								</label>
 								<label>
 									<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Episode</span>
-									<input type="text" bind:value={infoEpisode} placeholder="1" class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+									<input type="text" bind:value={infoEpisode} oninput={() => { touched.episode = true; }} placeholder="1" class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 								</label>
 							</div>
 						{/if}
@@ -416,11 +441,11 @@
 						<div class="grid gap-3 {isMusic ? 'grid-cols-2' : 'grid-cols-3'}">
 							<label>
 								<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Year</span>
-								<input type="text" bind:value={infoYear} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+								<input type="text" bind:value={infoYear} oninput={() => { touched.year = true; }} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 							</label>
 							<label>
 								<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Type</span>
-								<select bind:value={infoType} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white">
+								<select bind:value={infoType} onchange={() => { touched.type = true; }} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white">
 									<option value="movie">Movie</option>
 									<option value="series">Series</option>
 									<option value="music">Music</option>
@@ -429,13 +454,13 @@
 							{#if !isMusic}
 								<label>
 									<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">IMDb ID</span>
-									<input type="text" bind:value={infoImdbId} placeholder="tt..." class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+									<input type="text" bind:value={infoImdbId} oninput={() => { touched.imdbId = true; }} placeholder="tt..." class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 								</label>
 							{/if}
 						</div>
 						<label class="block">
 							<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{isMusic ? 'Cover Art URL' : 'Poster URL'}</span>
-							<input type="text" bind:value={infoPosterUrl} placeholder="https://..." class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+							<input type="text" bind:value={infoPosterUrl} oninput={() => { touched.posterUrl = true; }} placeholder="https://..." class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 						</label>
 						{#if infoPlot}
 							<div class="rounded-md bg-primary/5 px-3 py-2 text-sm italic text-gray-600 dark:bg-primary/10 dark:text-gray-400">{infoPlot}</div>
@@ -465,7 +490,7 @@
 					<div class="grid gap-3 text-sm {isMusic ? 'grid-cols-3' : 'grid-cols-4'}">
 						<label>
 							<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Disc Type</span>
-							<select bind:value={infoDisctype} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white">
+							<select bind:value={infoDisctype} onchange={() => { touched.disctype = true; }} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 text-sm text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white">
 								<option value="dvd">DVD</option>
 								<option value="bluray">Blu-ray</option>
 								<option value="bluray4k">4K UHD</option>
@@ -475,7 +500,7 @@
 						</label>
 						<label>
 							<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Disc Label</span>
-							<input type="text" bind:value={infoLabel} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 font-mono text-xs text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+							<input type="text" bind:value={infoLabel} oninput={() => { touched.label = true; }} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 font-mono text-xs text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 						</label>
 						<div>
 							<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Drive</span>
@@ -539,7 +564,7 @@
 					<!-- Output path -->
 					<label class="block text-sm">
 						<span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Output Path</span>
-						<input type="text" bind:value={infoPath} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 font-mono text-xs text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
+						<input type="text" bind:value={infoPath} oninput={() => { touched.path = true; }} class="w-full rounded-sm border border-primary/25 bg-primary/5 px-2 py-1 font-mono text-xs text-gray-900 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary dark:border-primary/30 dark:bg-primary/10 dark:text-white" />
 					</label>
 
 					<!-- Link to full job detail -->

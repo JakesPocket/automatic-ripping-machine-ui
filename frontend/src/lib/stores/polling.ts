@@ -5,6 +5,7 @@ export interface PollingStore<T> extends Readable<T> {
 	refresh: () => Promise<void>;
 	start: () => void;
 	stop: () => void;
+	update: (fn: (current: T) => T) => void;
 	readonly loading: Readable<boolean>;
 	readonly error: Readable<string | null>;
 	readonly initialized: Readable<boolean>;
@@ -79,6 +80,7 @@ export function createPollingStore<T>(
 		refresh,
 		start,
 		stop,
+		update: (fn: (current: T) => T) => data.update(fn),
 		loading: { subscribe: loading.subscribe },
 		error: { subscribe: error.subscribe },
 		initialized: { subscribe: initialized.subscribe }

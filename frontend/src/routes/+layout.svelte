@@ -13,12 +13,15 @@
 	let togglingPause = $state(false);
 
 	async function toggleRipping() {
+		if (togglingPause) return;
 		togglingPause = true;
+		const newValue = !$dashboard.ripping_enabled;
+		dashboard.update(d => ({ ...d, ripping_enabled: newValue }));
 		try {
-			await setRippingEnabled(!$dashboard.ripping_enabled);
-			await dashboard.refresh();
+			await setRippingEnabled(newValue);
 		} catch {
-			// next poll will reconcile
+			// Revert on failure — next poll will also reconcile
+			dashboard.update(d => ({ ...d, ripping_enabled: !newValue }));
 		} finally {
 			togglingPause = false;
 		}
