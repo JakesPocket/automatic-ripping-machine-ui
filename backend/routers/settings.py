@@ -86,7 +86,7 @@ class ArmConfigUpdate(BaseModel):
     config: dict
 
 
-@router.put("/settings/arm")
+@router.put("/settings/arm", responses={400: {"description": "Invalid config"}, 502: {"description": "ARM service unreachable"}})
 async def update_arm_config(body: ArmConfigUpdate):
     result = await arm_client.update_config(body.config)
     if result is None:
@@ -109,7 +109,7 @@ async def test_metadata_key():
         return {"success": False, "message": "ARM service unreachable", "provider": "unknown"}
 
 
-@router.patch("/settings/transcoder")
+@router.patch("/settings/transcoder", responses={400: {"description": "Invalid config"}, 502: {"description": "Transcoder service unreachable"}})
 async def update_transcoder_config(body: dict):
     result = await transcoder_client.update_config(body)
     if result is None:
@@ -133,19 +133,22 @@ async def test_transcoder_webhook(body: WebhookTestRequest):
     return await transcoder_client.test_webhook(body.webhook_secret)
 
 
+def _drive_capabilities(d) -> list[str]:
+    """Extract capability labels from a drive object."""
+    caps = []
+    for attr, label in (("read_cd", "CD"), ("read_dvd", "DVD"), ("read_bd", "BD"), ("uhd_capable", "UHD")):
+        if getattr(d, attr, False):
+            caps.append(label)
+    return caps
+
+
 @router.get("/settings/system-info")
 async def get_system_info():
     """Gather system info: versions, paths, database, drives."""
-    # Versions
     arm_versions = await arm_client.get_version()
-
     tc_health = await transcoder_client.health()
-    transcoder_version = None
-    if tc_health:
-        transcoder_version = tc_health.get("version")
 
     # UI version from local VERSION file
-    ui_version = "unknown"
     ui_version_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "VERSION")
 
     def _read_version() -> str:
@@ -156,52 +159,36 @@ async def get_system_info():
             return "unknown"
 
     ui_version = await asyncio.to_thread(_read_version)
+    tc_version = tc_health.get("version") if tc_health else None
 
     versions = {
         "arm": arm_versions.get("arm_version", "unknown") if arm_versions else "offline",
         "makemkv": arm_versions.get("makemkv_version", "unknown") if arm_versions else "offline",
-        "transcoder": transcoder_version or ("offline" if not tc_health else "unknown"),
+        "transcoder": tc_version or ("offline" if not tc_health else "unknown"),
         "ui": ui_version,
     }
 
-    # Paths — delegate to ARM container (paths only exist there)
-    paths = await arm_client.get_paths() or []
-
-    # Database
     db_path = app_settings.arm_db_path
-    db_info = {
-        "path": db_path,
-        "size_bytes": os.path.getsize(db_path) if os.path.isfile(db_path) else None,
-        "available": arm_db.is_available(),
-    }
-
-    # Drives
-    drives = arm_db.get_drives()
-    drive_list = []
-    for d in drives:
-        caps = []
-        if getattr(d, 'read_cd', False): caps.append('CD')
-        if getattr(d, 'read_dvd', False): caps.append('DVD')
-        if getattr(d, 'read_bd', False): caps.append('BD')
-        if getattr(d, 'uhd_capable', False): caps.append('UHD')
-        drive_list.append({
-            "name": d.name,
-            "mount": d.mount,
-            "maker": d.maker,
-            "model": d.model,
-            "capabilities": caps,
+    drive_list = [
+        {
+            "name": d.name, "mount": d.mount, "maker": d.maker,
+            "model": d.model, "capabilities": _drive_capabilities(d),
             "firmware": d.firmware,
-        })
-
-    endpoints = {
-        "arm": {"url": app_settings.arm_url, "reachable": arm_versions is not None},
-        "transcoder": {"url": app_settings.transcoder_url, "reachable": tc_health is not None},
-    }
+        }
+        for d in arm_db.get_drives()
+    ]
 
     return {
         "versions": versions,
-        "endpoints": endpoints,
-        "paths": paths,
-        "database": db_info,
+        "endpoints": {
+            "arm": {"url": app_settings.arm_url, "reachable": arm_versions is not None},
+            "transcoder": {"url": app_settings.transcoder_url, "reachable": tc_health is not None},
+        },
+        "paths": await arm_client.get_paths() or [],
+        "database": {
+            "path": db_path,
+            "size_bytes": os.path.getsize(db_path) if os.path.isfile(db_path) else None,
+            "available": arm_db.is_available(),
+        },
         "drives": drive_list,
     }

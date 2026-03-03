@@ -42,43 +42,47 @@ class DeleteRequest(BaseModel):
     path: str
 
 
-@router.get("/roots")
+_503_ARM = {503: {"description": "ARM web UI is unreachable"}}
+_502_503_ARM = {502: {"description": "ARM action failed"}, 503: {"description": "ARM web UI is unreachable"}}
+
+
+@router.get("/roots", responses=_503_ARM)
 async def get_roots() -> list[dict[str, Any]]:
     """Return configured media root directories."""
     return _check_result(await arm_client.get_file_roots())
 
 
-@router.get("/list")
+@router.get("/list", responses=_502_503_ARM)
 async def list_directory(path: str = Query(..., description="Directory path to list")) -> dict[str, Any]:
     """List contents of a directory."""
     return _check_result(await arm_client.list_files(path))
 
 
-@router.post("/rename")
+@router.post("/rename", responses=_502_503_ARM)
 async def rename_file(body: RenameRequest) -> dict[str, Any]:
     """Rename a file or directory."""
     return _check_result(await arm_client.rename_file(body.path, body.new_name))
 
 
-@router.post("/move")
+@router.post("/move", responses=_502_503_ARM)
 async def move_file(body: MoveRequest) -> dict[str, Any]:
     """Move a file or directory."""
     return _check_result(await arm_client.move_file(body.path, body.destination))
 
 
-@router.post("/mkdir")
+@router.post("/mkdir", responses=_502_503_ARM)
 async def create_directory(body: MkdirRequest) -> dict[str, Any]:
     """Create a new directory."""
     return _check_result(await arm_client.create_directory(body.path, body.name))
 
 
-@router.post("/fix-permissions")
+@router.post("/fix-permissions", responses=_502_503_ARM)
 async def fix_permissions(body: FixPermissionsRequest) -> dict[str, Any]:
     """Fix ownership and permissions for a file or directory."""
     return _check_result(await arm_client.fix_file_permissions(body.path))
 
 
-@router.delete("/delete")
+@router.delete("/delete", responses=_502_503_ARM)
 async def delete_file(body: DeleteRequest) -> dict[str, Any]:
     """Delete a file or directory."""
     return _check_result(await arm_client.delete_file(body.path))

@@ -14,6 +14,27 @@ from backend.config import settings
 log = logging.getLogger(__name__)
 
 
+def _parse_progress_lines(lines: list[str]) -> tuple:
+    """Scan MakeMKV progress lines and return (last_prgv, last_prgc, last_prgt)."""
+    last_prgv = None
+    last_prgc = None
+    last_prgt = None
+    for line in lines:
+        if line.startswith("PRGT:"):
+            m = re.match(r'PRGT:\d+,\d+,"([^"]+)"', line)
+            if m:
+                last_prgt = m.group(1)
+        elif line.startswith("PRGV:"):
+            m = re.match(r"PRGV:(\d+),(\d+),(\d+)", line)
+            if m:
+                last_prgv = m
+        elif line.startswith("PRGC:"):
+            m = re.match(r'PRGC:\d+,(\d+),"([^"]+)"', line)
+            if m:
+                last_prgc = m
+    return last_prgv, last_prgc, last_prgt
+
+
 def get_rip_progress(job_id: int) -> dict:
     """Parse MakeMKV progress from a job's progress file.
 
@@ -31,34 +52,9 @@ def get_rip_progress(job_id: int) -> dict:
     except OSError:
         return result
 
-    lines = data.splitlines()
-
-    # PRGT messages are rare (one per phase transition) and can be anywhere
-    # in the file, so scan all lines.  PRGV/PRGC are high-frequency and we
-    # only need the last occurrence, but scanning all lines is cheap for
-    # progress files (typically < 200 KB).
-    last_prgv = None
-    last_prgc = None
-    last_prgt = None
-    for line in lines:
-        if line.startswith("PRGT:"):
-            m = re.match(r'PRGT:\d+,\d+,"([^"]+)"', line)
-            if m:
-                last_prgt = m.group(1)
-        elif line.startswith("PRGV:"):
-            m = re.match(r"PRGV:(\d+),(\d+),(\d+)", line)
-            if m:
-                last_prgv = m
-        elif line.startswith("PRGC:"):
-            m = re.match(r'PRGC:\d+,(\d+),"([^"]+)"', line)
-            if m:
-                last_prgc = m
+    last_prgv, last_prgc, last_prgt = _parse_progress_lines(data.splitlines())
 
     if last_prgv:
-        # PRGV:current,total,max — total/max gives overall disc progress.
-        # MakeMKV resets total/max per major phase (scan, decrypt, save),
-        # so total==max during the scan phase is NOT 100% rip completion.
-        # Only report progress during the actual "Saving" rip phase.
         total = int(last_prgv.group(2))
         maximum = int(last_prgv.group(3))
         if maximum > 0:

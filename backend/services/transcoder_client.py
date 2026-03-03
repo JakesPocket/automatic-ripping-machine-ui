@@ -8,6 +8,7 @@ import httpx
 
 from backend.config import settings
 
+_CONFIG_ENDPOINT = "/config"
 _client: httpx.AsyncClient | None = None
 
 
@@ -71,7 +72,7 @@ async def test_connection() -> dict[str, Any]:
 
     # Step 2: verify API key by hitting an authenticated endpoint
     try:
-        config_resp = await get_client().get("/config")
+        config_resp = await get_client().get(_CONFIG_ENDPOINT)
         if config_resp.status_code in (401, 403):
             result["auth_ok"] = False
         else:
@@ -204,7 +205,7 @@ async def get_system_stats() -> dict[str, Any] | None:
 async def get_config() -> dict[str, Any] | None:
     """Fetch transcoder config with valid option lists. Returns None if offline."""
     try:
-        resp = await get_client().get("/config")
+        resp = await get_client().get(_CONFIG_ENDPOINT)
         resp.raise_for_status()
         return resp.json()
     except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError):
@@ -214,7 +215,7 @@ async def get_config() -> dict[str, Any] | None:
 async def update_config(config: dict[str, Any]) -> dict[str, Any] | None:
     """Patch transcoder config. Returns response dict or None if offline."""
     try:
-        resp = await get_client().patch("/config", json=config)
+        resp = await get_client().patch(_CONFIG_ENDPOINT, json=config)
         resp.raise_for_status()
         return resp.json()
     except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError):

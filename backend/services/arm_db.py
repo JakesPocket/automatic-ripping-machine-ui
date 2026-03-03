@@ -406,6 +406,21 @@ TRANSCODE_OVERRIDE_KEYS = {
 }
 
 
+def _coerce_override(key: str, value) -> tuple[str, object] | None:
+    """Coerce a single transcode override value. Returns None to skip."""
+    if value is None or value == "":
+        return None
+    if key == "video_quality":
+        return key, int(value)
+    if key == "delete_source":
+        if isinstance(value, bool):
+            return key, value
+        if isinstance(value, str):
+            return key, value.lower() in ("true", "1", "yes")
+        return key, bool(value)
+    return key, str(value)
+
+
 def update_job_transcode_overrides(job_id: int, overrides: dict) -> dict | None:
     """Validate and store per-job transcode overrides.
 
@@ -418,22 +433,11 @@ def update_job_transcode_overrides(job_id: int, overrides: dict) -> dict | None:
     if invalid:
         raise ValueError(f"Unknown keys: {', '.join(sorted(invalid))}")
 
-    # Type coercion
     clean = {}
     for key, value in overrides.items():
-        if value is None or value == "":
-            continue
-        if key == "video_quality":
-            clean[key] = int(value)
-        elif key == "delete_source":
-            if isinstance(value, bool):
-                clean[key] = value
-            elif isinstance(value, str):
-                clean[key] = value.lower() in ("true", "1", "yes")
-            else:
-                clean[key] = bool(value)
-        else:
-            clean[key] = str(value)
+        pair = _coerce_override(key, value)
+        if pair:
+            clean[pair[0]] = pair[1]
 
     try:
         with get_rw_session() as session:

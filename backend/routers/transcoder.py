@@ -32,7 +32,7 @@ async def list_jobs(
     )
 
 
-@router.post("/jobs/{job_id}/retry")
+@router.post("/jobs/{job_id}/retry", responses={503: {"description": "Transcoder offline"}})
 async def retry_job(job_id: int) -> dict[str, Any]:
     result = await transcoder_client.retry_job(job_id)
     if result is None:
@@ -40,7 +40,7 @@ async def retry_job(job_id: int) -> dict[str, Any]:
     return result
 
 
-@router.delete("/jobs/{job_id}")
+@router.delete("/jobs/{job_id}", responses={503: {"description": "Transcoder offline or job not found"}})
 async def delete_job(job_id: int) -> dict[str, str]:
     success = await transcoder_client.delete_job(job_id)
     if not success:
@@ -56,7 +56,7 @@ async def list_logs():
     return data
 
 
-@router.get("/logs/{filename}/structured", response_model=StructuredLogResponse)
+@router.get("/logs/{filename}/structured", response_model=StructuredLogResponse, responses={404: {"description": "Log not found or transcoder offline"}})
 async def get_structured_log(
     filename: str,
     mode: str = Query("tail", pattern="^(tail|full)$"),
@@ -72,7 +72,7 @@ async def get_structured_log(
     return data
 
 
-@router.get("/logs/{filename}", response_model=LogContentResponse)
+@router.get("/logs/{filename}", response_model=LogContentResponse, responses={404: {"description": "Log not found or transcoder offline"}})
 async def get_log(
     filename: str,
     mode: str = Query("tail", pattern="^(tail|full)$"),
@@ -84,7 +84,7 @@ async def get_log(
     return data
 
 
-@router.post("/jobs/{job_id}/retranscode")
+@router.post("/jobs/{job_id}/retranscode", responses={400: {"description": "Invalid job status"}, 404: {"description": "Transcoder job not found"}, 503: {"description": "Transcoder unavailable"}})
 async def retranscode_transcoder_job(job_id: int):
     """Re-queue a completed or failed transcoder job for re-transcoding."""
     job = await transcoder_client.get_job(job_id)

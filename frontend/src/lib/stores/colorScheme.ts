@@ -362,7 +362,7 @@ function applyScheme(id: string) {
 	for (const [prop, value] of Object.entries(scheme.tokens)) {
 		root.style.setProperty(prop, value);
 	}
-	root.setAttribute('data-scheme', scheme.id);
+	root.dataset.scheme = scheme.id;
 	if (scheme.forceDark) {
 		root.classList.add('dark');
 	}

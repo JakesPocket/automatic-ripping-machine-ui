@@ -14,7 +14,7 @@ def list_notifications():
     return [NotificationSchema.model_validate(n) for n in notifications]
 
 
-@router.patch("/notifications/{notify_id}")
+@router.patch("/notifications/{notify_id}", responses={502: {"description": "Failed to dismiss notification"}, 503: {"description": "ARM web UI is unreachable"}})
 async def dismiss_notification(notify_id: int) -> dict[str, Any]:
     """Mark a notification as read (proxies to ARM)."""
     result = await arm_client.dismiss_notification(notify_id)

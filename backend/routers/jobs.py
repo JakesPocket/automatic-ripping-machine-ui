@@ -18,6 +18,13 @@ from backend.services import arm_client, arm_db, progress, transcoder_client
 
 log = logging.getLogger(__name__)
 
+_JOB_NOT_FOUND = "Job not found"
+_ARM_UNREACHABLE = "ARM service unreachable"
+
+_404_JOB = {404: {"description": "Job not found"}}
+_502_ARM = {502: {"description": "ARM service unreachable"}}
+_404_502_ARM = {404: {"description": "Job not found"}, 502: {"description": "ARM service unreachable"}}
+
 router = APIRouter(prefix="/api", tags=["jobs"])
 
 
@@ -39,11 +46,11 @@ def list_jobs(
     )
 
 
-@router.get("/jobs/{job_id}", response_model=JobDetailSchema)
+@router.get("/jobs/{job_id}", response_model=JobDetailSchema, responses=_404_JOB)
 def get_job(job_id: int):
     job, config = arm_db.get_job_with_config(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail=_JOB_NOT_FOUND)
 
     tracks = [TrackSchema.model_validate(t) for t in (job.tracks or [])]
 
@@ -51,22 +58,22 @@ def get_job(job_id: int):
     return JobDetailSchema(**job_data, tracks=tracks, config=config)
 
 
-@router.get("/jobs/{job_id}/progress")
+@router.get("/jobs/{job_id}/progress", responses=_404_JOB)
 def get_job_progress(job_id: int):
     job = arm_db.get_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail=_JOB_NOT_FOUND)
     result = progress.get_rip_progress(job.job_id)
     result.update(arm_db.get_job_track_counts(job_id))
     return result
 
 
-@router.get("/jobs/{job_id}/crc-lookup")
+@router.get("/jobs/{job_id}/crc-lookup", responses=_404_502_ARM)
 async def crc_lookup_endpoint(job_id: int):
     """Look up a job's CRC64 hash in the community database."""
     job = arm_db.get_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail=_JOB_NOT_FOUND)
     if not job.crc_id:
         return {"no_crc": True, "found": False, "results": [], "has_api_key": False}
     try:
@@ -76,10 +83,10 @@ async def crc_lookup_endpoint(job_id: int):
         raise HTTPException(status_code=exc.response.status_code, detail="CRC lookup failed")
     except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError) as exc:
         log.error("CRC lookup for job %d unreachable: %s", job_id, exc)
-        raise HTTPException(status_code=502, detail="ARM service unreachable")
+        raise HTTPException(status_code=502, detail=_ARM_UNREACHABLE)
 
 
-@router.get("/metadata/search", response_model=list[SearchResultSchema])
+@router.get("/metadata/search", response_model=list[SearchResultSchema], responses=_502_ARM)
 async def search_metadata(
     q: str = Query(..., min_length=1),
     year: str | None = None,
@@ -92,10 +99,10 @@ async def search_metadata(
         raise HTTPException(status_code=exc.response.status_code, detail="Metadata search failed")
     except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError) as exc:
         log.error("Metadata search unreachable for q=%r: %s", q, exc)
-        raise HTTPException(status_code=502, detail="ARM service unreachable")
+        raise HTTPException(status_code=502, detail=_ARM_UNREACHABLE)
 
 
-@router.get("/metadata/{imdb_id}", response_model=MediaDetailSchema)
+@router.get("/metadata/{imdb_id}", response_model=MediaDetailSchema, responses={**_404_JOB, **_502_ARM})
 async def get_media_detail(imdb_id: str):
     """Fetch full details for a title by IMDb ID (proxied through ARM)."""
     try:
@@ -105,13 +112,13 @@ async def get_media_detail(imdb_id: str):
         raise HTTPException(status_code=exc.response.status_code, detail="Metadata detail failed")
     except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError):
         log.error("Metadata detail unreachable")
-        raise HTTPException(status_code=502, detail="ARM service unreachable")
+        raise HTTPException(status_code=502, detail=_ARM_UNREACHABLE)
     if not result:
         raise HTTPException(status_code=404, detail="Title not found")
     return result
 
 
-@router.get("/metadata/music/search")
+@router.get("/metadata/music/search", responses=_502_ARM)
 async def search_music_metadata(
     q: str = Query(..., min_length=1),
     artist: str | None = None,
@@ -133,10 +140,10 @@ async def search_music_metadata(
         raise HTTPException(status_code=exc.response.status_code, detail="Music search failed")
     except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError):
         log.error("Music search unreachable")
-        raise HTTPException(status_code=502, detail="ARM service unreachable")
+        raise HTTPException(status_code=502, detail=_ARM_UNREACHABLE)
 
 
-@router.get("/metadata/music/{release_id}", response_model=MusicDetailSchema)
+@router.get("/metadata/music/{release_id}", response_model=MusicDetailSchema, responses={**_404_JOB, **_502_ARM})
 async def get_music_detail(release_id: str):
     """Fetch full release details from MusicBrainz (proxied through ARM)."""
     try:
@@ -146,13 +153,13 @@ async def get_music_detail(release_id: str):
         raise HTTPException(status_code=exc.response.status_code, detail="Music detail failed")
     except (httpx.HTTPError, httpx.ConnectError, RuntimeError, OSError):
         log.error("Music detail unreachable")
-        raise HTTPException(status_code=502, detail="ARM service unreachable")
+        raise HTTPException(status_code=502, detail=_ARM_UNREACHABLE)
     if not result:
         raise HTTPException(status_code=404, detail="Release not found")
     return result
 
 
-@router.patch("/jobs/{job_id}/transcode-config")
+@router.patch("/jobs/{job_id}/transcode-config", responses={400: {"description": "Invalid request"}, **_404_JOB})
 async def update_transcode_config(job_id: int, request: Request):
     """Set per-job transcode override settings."""
     body = await request.json()
@@ -163,11 +170,11 @@ async def update_transcode_config(job_id: int, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if result is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail=_JOB_NOT_FOUND)
     return {"success": True, "overrides": result}
 
 
-@router.post("/jobs/{job_id}/retranscode")
+@router.post("/jobs/{job_id}/retranscode", responses={404: {"description": "Job not found or not a video disc"}, 503: {"description": "Transcoder unavailable"}})
 async def retranscode_job(job_id: int):
     """Re-send a completed ARM job to the transcoder."""
     payload = arm_db.get_job_retranscode_info(job_id)

@@ -11,7 +11,7 @@ def list_drives():
     return arm_db.get_drives_with_jobs()
 
 
-@router.patch("/drives/{drive_id}")
+@router.patch("/drives/{drive_id}", responses={400: {"description": "No fields to update"}, 404: {"description": "Update failed"}, 502: {"description": "ARM unreachable"}})
 async def update_drive(drive_id: int, body: DriveUpdateRequest):
     data = body.model_dump(exclude_none=True)
     if not data:

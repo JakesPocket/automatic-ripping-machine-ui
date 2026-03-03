@@ -11,7 +11,7 @@ def list_logs():
     return log_reader.list_logs()
 
 
-@router.get("/logs/{filename}/structured", response_model=StructuredLogResponse)
+@router.get("/logs/{filename}/structured", response_model=StructuredLogResponse, responses={404: {"description": "Log file not found"}})
 def get_structured_log(
     filename: str,
     mode: str = Query("tail", pattern="^(tail|full)$"),
@@ -27,7 +27,7 @@ def get_structured_log(
     return result
 
 
-@router.get("/logs/{filename}", response_model=LogContentResponse)
+@router.get("/logs/{filename}", response_model=LogContentResponse, responses={404: {"description": "Log file not found"}})
 def get_log(
     filename: str,
     mode: str = Query("tail", pattern="^(tail|full)$"),
