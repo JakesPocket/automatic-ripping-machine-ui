@@ -154,6 +154,7 @@ export interface SystemStats {
 	cpu_temp: number;
 	gpu_percent: number;
 	gpu_temp: number;
+	gpu_memory: MemoryInfo | null;
 	memory: MemoryInfo | null;
 	storage: StoragePath[];
 }

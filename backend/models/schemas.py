@@ -197,6 +197,7 @@ class SystemStatsSchema(BaseModel):
     cpu_temp: float = 0
     gpu_percent: float = 0
     gpu_temp: float = 0
+    gpu_memory: MemoryInfoSchema | None = None
     memory: MemoryInfoSchema | None = None
     storage: list[StoragePathSchema] = []
 

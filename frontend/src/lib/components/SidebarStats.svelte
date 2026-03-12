@@ -96,15 +96,16 @@
 					{/if}
 				</div>
 
-				{#if activeStats.memory}
+				{@const mem = activePanel === 'transcoder' && activeStats.gpu_memory ? activeStats.gpu_memory : activeStats.memory}
+				{#if mem}
 					<div>
 						<div class="mb-0.5 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
 							<span>Mem</span>
-							<span>{activeStats.memory.used_gb} / {activeStats.memory.total_gb} GB</span>
+							<span>{mem.used_gb < 1 ? `${(mem.used_gb * 1024).toFixed(0)} MB` : `${mem.used_gb} GB`} / {mem.total_gb} GB</span>
 						</div>
 						<ProgressBar
-							value={activeStats.memory.percent}
-							color={activeStats.memory.percent >= 90 ? 'bg-red-500' : activeStats.memory.percent >= 70 ? 'bg-yellow-500' : 'bg-violet-500'}
+							value={mem.percent}
+							color={mem.percent >= 90 ? 'bg-red-500' : mem.percent >= 70 ? 'bg-yellow-500' : 'bg-violet-500'}
 							showLabel={false}
 						/>
 					</div>
