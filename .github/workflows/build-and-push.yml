@@ -16,15 +16,16 @@ permissions:
   contents: read
   packages: write
 
-env:
-  GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/arm-ui
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Set image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/arm-ui" >> "$GITHUB_OUTPUT"
 
       - name: Read VERSION file
         id: version
@@ -52,8 +53,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            ${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.version }}
-            ${{ env.GHCR_IMAGE }}:latest
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}
+            ${{ steps.image.outputs.name }}:latest
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
