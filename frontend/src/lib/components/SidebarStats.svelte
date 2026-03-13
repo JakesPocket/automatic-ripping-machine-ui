@@ -18,24 +18,38 @@
 
 	const activeHw = $derived(activePanel === 'ripper' ? (armOnline ? systemInfo : null) : (transcoderOnline ? transcoderInfo : null));
 	const activeStats = $derived(activePanel === 'ripper' ? (armOnline ? systemStats : null) : (transcoderOnline ? transcoderStats : null));
+
+	// Unified theme: blue for ripper, cyan for transcoder
+	const barColor = $derived(activePanel === 'ripper' ? 'bg-blue-500' : 'bg-cyan-500');
+	function themedBar(percent: number): string {
+		if (percent >= 90) return 'bg-red-500';
+		if (percent >= 70) return 'bg-yellow-500';
+		return barColor;
+	}
 </script>
 
-<div data-stats class="border-t border-primary/20 px-3 py-3 dark:border-primary/20">
+<div
+	data-stats
+	class="border-t px-3 py-3 transition-colors duration-500
+		{activePanel === 'ripper'
+			? 'border-blue-500/20 bg-blue-500/[0.04]'
+			: 'border-cyan-500/20 bg-cyan-500/[0.04]'}"
+>
 	<!-- Panel switcher — always visible -->
 	<div class="mb-2 flex rounded-sm bg-primary/10 p-0.5 dark:bg-primary/10">
 		<button
 			onclick={() => activePanel = 'ripper'}
-			class="flex-1 rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors
+			class="flex-1 rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-all duration-500
 				{activePanel === 'ripper'
-					? 'bg-primary/20 text-primary-text shadow-xs dark:bg-primary/25 dark:text-primary-text-dark'
-					: 'text-primary-text/50 hover:text-primary-text dark:text-primary-text-dark/50 dark:hover:text-primary-text-dark'}"
+					? 'bg-blue-500/20 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.25)]'
+					: 'text-gray-500 hover:text-gray-300'}"
 		>Ripper</button>
 		<button
 			onclick={() => activePanel = 'transcoder'}
-			class="flex-1 rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors
+			class="flex-1 rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-all duration-500
 				{activePanel === 'transcoder'
-					? 'bg-primary/20 text-primary-text shadow-xs dark:bg-primary/25 dark:text-primary-text-dark'
-					: 'text-primary-text/50 hover:text-primary-text dark:text-primary-text-dark/50 dark:hover:text-primary-text-dark'}"
+					? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+					: 'text-gray-500 hover:text-gray-300'}"
 		>Transcoder</button>
 	</div>
 
@@ -75,7 +89,7 @@
 						</div>
 						<ProgressBar
 							value={activeStats.gpu_percent}
-							color={activeStats.gpu_percent >= 90 ? 'bg-red-500' : activeStats.gpu_percent >= 70 ? 'bg-yellow-500' : 'bg-cyan-500'}
+							color={themedBar(activeStats.gpu_percent)}
 							showLabel={false}
 						/>
 					{:else}
@@ -90,7 +104,7 @@
 						</div>
 						<ProgressBar
 							value={activeStats.cpu_percent}
-							color={activeStats.cpu_percent >= 90 ? 'bg-red-500' : activeStats.cpu_percent >= 70 ? 'bg-yellow-500' : 'bg-cyan-500'}
+							color={themedBar(activeStats.cpu_percent)}
 							showLabel={false}
 						/>
 					{/if}
@@ -105,7 +119,7 @@
 						</div>
 						<ProgressBar
 							value={mem.percent}
-							color={mem.percent >= 90 ? 'bg-red-500' : mem.percent >= 70 ? 'bg-yellow-500' : 'bg-violet-500'}
+							color={themedBar(mem.percent)}
 							showLabel={false}
 						/>
 					</div>
@@ -118,7 +132,7 @@
 						</div>
 						<ProgressBar
 							value={mem.percent}
-							color={mem.percent >= 90 ? 'bg-red-500' : mem.percent >= 70 ? 'bg-yellow-500' : 'bg-violet-500'}
+							color={themedBar(mem.percent)}
 							showLabel={false}
 						/>
 					</div>
@@ -137,7 +151,7 @@
 							</div>
 							<ProgressBar
 								value={sp.percent}
-								color={sp.percent >= 90 ? 'bg-red-500' : sp.percent >= 70 ? 'bg-yellow-500' : 'bg-emerald-500'}
+								color={themedBar(sp.percent)}
 								showLabel={false}
 							/>
 						</div>
