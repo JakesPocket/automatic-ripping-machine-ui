@@ -26,6 +26,15 @@
 		if (percent >= 70) return 'bg-yellow-500';
 		return barColor;
 	}
+
+	// Round to nearest common memory size for display (2,4,6,8,12,16,24,32,48,64,128)
+	const memSizes = [2, 4, 6, 8, 12, 16, 24, 32, 48, 64, 128];
+	function niceMemSize(gb: number): number {
+		for (const s of memSizes) {
+			if (gb <= s) return s;
+		}
+		return Math.ceil(gb);
+	}
 </script>
 
 <div
@@ -60,15 +69,15 @@
 			<p class="text-xs text-orange-500 dark:text-orange-400">Cannot reach the transcoder service</p>
 		{:else if activeHw}
 			{#if activePanel === 'transcoder' && activeHw.gpu_name}
-				<p class="truncate text-xs text-gray-600 dark:text-gray-400" title={activeHw.gpu_name}>{activeHw.gpu_name}</p>
+				<p class="truncate text-[11px] text-cyan-500" title={activeHw.gpu_name}>{activeHw.gpu_name}</p>
 			{:else}
-				<p class="truncate text-xs text-gray-600 dark:text-gray-400" title={activeHw.cpu ?? undefined}>{activeHw.cpu ?? 'Unknown CPU'}</p>
+				<p class="truncate text-[11px] text-blue-400" title={activeHw.cpu ?? undefined}>{activeHw.cpu ?? 'Unknown CPU'}</p>
 			{/if}
 			<p class="mb-2 text-xs text-gray-600 dark:text-gray-400">
 				{#if activePanel === 'transcoder' && activeHw.gpu_vram_gb}
-					{activeHw.gpu_vram_gb.toFixed(1)} GB VRAM
+					{niceMemSize(activeHw.gpu_vram_gb)} GB VRAM
 				{:else}
-					{activeHw.memory_total_gb ? `${activeHw.memory_total_gb.toFixed(1)} GB RAM` : 'RAM: N/A'}
+					{activeHw.memory_total_gb ? `${niceMemSize(activeHw.memory_total_gb)} GB RAM` : 'RAM: N/A'}
 				{/if}
 			</p>
 		{/if}
@@ -115,7 +124,7 @@
 					<div>
 						<div class="mb-0.5 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
 							<span>Mem</span>
-							<span>{mem.used_gb < 1 ? `${(mem.used_gb * 1024).toFixed(0)} MB` : `${mem.used_gb} GB`} / {mem.total_gb} GB</span>
+							<span>{mem.used_gb < 1 ? `${(mem.used_gb * 1024).toFixed(0)} MB` : `${mem.used_gb} GB`} / {niceMemSize(mem.total_gb)} GB</span>
 						</div>
 						<ProgressBar
 							value={mem.percent}
@@ -128,7 +137,7 @@
 					<div>
 						<div class="mb-0.5 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
 							<span>Mem</span>
-							<span>{mem.used_gb < 1 ? `${(mem.used_gb * 1024).toFixed(0)} MB` : `${mem.used_gb} GB`} / {mem.total_gb} GB</span>
+							<span>{mem.used_gb < 1 ? `${(mem.used_gb * 1024).toFixed(0)} MB` : `${mem.used_gb} GB`} / {niceMemSize(mem.total_gb)} GB</span>
 						</div>
 						<ProgressBar
 							value={mem.percent}
