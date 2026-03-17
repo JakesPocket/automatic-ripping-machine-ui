@@ -15,8 +15,9 @@ let fileSortDir = $state<'asc' | 'desc'>('desc');
 
 let deleteDialog = { open: false, filename: '', tab: '' };
 let feedback: { type: 'success' | 'error'; message: string } | null = null;
-
-function handleDeleteRequest(filename: string, tab: 'arm' | 'transcoder') {
+	}
+}
+</script>
 	deleteDialog = { open: true, filename, tab };
 }
 
@@ -38,6 +39,14 @@ function sortLogFiles(files: LogFile[]): LogFile[] {
 		const av = a[fileSortKey];
 		const bv = b[fileSortKey];
 		let cmp: number;
+		if (fileSortKey === 'size') {
+			cmp = (av as number) - (bv as number);
+		} else {
+			cmp = String(av).localeCompare(String(bv));
+		}
+		return fileSortDir === 'asc' ? cmp : -cmp;
+	});
+}
 		if (fileSortKey === 'size') {
 			cmp = (av as number) - (bv as number);
 		} else {
