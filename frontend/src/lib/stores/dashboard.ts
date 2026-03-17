@@ -16,7 +16,8 @@ const emptyDashboard: DashboardData = {
 	transcoder_system_stats: null,
 	active_transcodes: [],
 	system_stats: null,
-	transcoder_info: null
+	transcoder_info: null,
+	makemkv_key: null
 };
 
 /** Singleton dashboard store — survives page navigations, retains last-known data. */

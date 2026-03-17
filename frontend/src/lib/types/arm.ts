@@ -174,6 +174,14 @@ export interface DashboardData {
 	active_transcodes: TranscoderJob[];
 	system_stats: SystemStats | null;
 	transcoder_info: HardwareInfo | null;
+	makemkv_key: MakeMkvKeyStatus | null;
+}
+
+export interface MakeMkvKeyStatus {
+	key_present: boolean;
+	key_type: 'beta' | 'permanent' | null;
+	key_prefix: string | null;
+	last_modified: string | null;
 }
 
 export interface LogFile {

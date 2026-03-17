@@ -53,6 +53,7 @@ async def get_dashboard():
     transcoder_task = asyncio.create_task(_fetch_transcoder())
     stats_task = asyncio.create_task(arm_client.get_system_stats())
     transcoder_stats_task = asyncio.create_task(transcoder_client.get_system_stats())
+    key_task = asyncio.create_task(arm_client.get_makemkv_key_status())
 
     transcoder_online, transcoder_stats, active_transcodes = await transcoder_task
 
@@ -65,6 +66,8 @@ async def get_dashboard():
     transcoder_stats_data = await transcoder_stats_task
     if transcoder_stats_data:
         transcoder_system_stats = SystemStatsSchema(**transcoder_stats_data)
+
+    makemkv_key = await key_task
 
     arm_hw = system_cache.get_arm_info()
     transcoder_hw = system_cache.get_transcoder_info()
@@ -86,4 +89,5 @@ async def get_dashboard():
         active_transcodes=active_transcodes,
         system_stats=system_stats,
         transcoder_info=HardwareInfoSchema(**transcoder_hw) if transcoder_hw else None,
+        makemkv_key=makemkv_key,
     )
