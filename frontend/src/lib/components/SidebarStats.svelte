@@ -48,9 +48,9 @@
 <div
 	data-stats
 	class="border-t px-3 py-3 transition-colors duration-500
-		{activePanel === 'ripper'
-			? 'border-blue-500/20 bg-blue-500/[0.04]'
-			: 'border-cyan-500/20 bg-cyan-500/[0.04]'}"
+		   {activePanel === 'ripper'
+			   ? 'border-blue-500/20 bg-blue-500/[0.04]'
+			   : 'border-purple-500/20 bg-purple-500/[0.04]'}"
 >
 	<!-- Panel switcher — always visible -->
 	<div class="mb-2 flex rounded-sm bg-primary/10 p-0.5 dark:bg-primary/10">
@@ -64,9 +64,9 @@
 		<button
 			onclick={() => activePanel = 'transcoder'}
 			class="flex-1 rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-all duration-500
-				{activePanel === 'transcoder'
-					? 'bg-purple-500/20 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
-					: 'text-gray-500 hover:text-gray-300'}"
+				   {activePanel === 'transcoder'
+					   ? 'bg-purple-500/20 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+					   : 'text-gray-500 hover:text-gray-300'}"
 		>Transcoder</button>
 	</div>
 
@@ -76,8 +76,8 @@
 		{:else if activePanel === 'transcoder' && !transcoderOnline}
 			<p class="text-xs text-orange-500 dark:text-orange-400">Cannot reach the transcoder service</p>
 		{:else if activeHw}
-			{#if activePanel === 'transcoder' && activeHw.gpu_name}
-				<p class="truncate text-[11px] text-cyan-500" title={activeHw.gpu_name}>{activeHw.gpu_name}</p>
+			   {#if activePanel === 'transcoder' && activeHw.gpu_name}
+				   <p class="truncate text-[11px] text-purple-500" title={activeHw.gpu_name}>{activeHw.gpu_name}</p>
 			{:else}
 				<p class="truncate text-[11px] text-blue-400" title={activeHw.cpu ?? undefined}>{activeHw.cpu ?? 'Unknown CPU'}</p>
 			{/if}
