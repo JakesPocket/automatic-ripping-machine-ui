@@ -171,8 +171,8 @@ async def dismiss_notification(notify_id: int) -> dict[str, Any] | None:
     return await _request("PATCH", f"/api/v1/notifications/{notify_id}")
 
 
-async def get_makemkv_key_status() -> dict[str, Any] | None:
-    """Fetch MakeMKV key status from the ARM container."""
+async def get_makemkv_key_valid() -> dict[str, Any] | None:
+    """Fetch MakeMKV key validity from the ARM container."""
     return await _request("GET", "/api/v1/system/makemkv-key")
 
 

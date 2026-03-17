@@ -220,7 +220,7 @@ class DashboardResponse(BaseModel):
     active_transcodes: list[dict[str, Any]] = []
     system_stats: SystemStatsSchema | None = None
     transcoder_info: HardwareInfoSchema | None = None
-    makemkv_key: dict[str, Any] | None = None
+    makemkv_key_valid: bool | None = None
 
 
 # --- Transcoder Schemas ---

@@ -107,8 +107,8 @@
 						<div class="h-2 w-2 shrink-0 rounded-full {$dashboard.transcoder_online && ($dashboard.transcoder_stats?.worker_running ?? true) ? 'bg-green-500' : $dashboard.transcoder_online ? 'bg-yellow-500' : 'bg-gray-400'}"></div>
 						<span class="text-gray-700 dark:text-gray-200">Transcode</span>
 					</div>
-					<div class="flex items-center gap-1.5" title={$dashboard.makemkv_key?.key_present ? `${$dashboard.makemkv_key.key_type === 'permanent' ? 'Permanent' : 'Beta'} key: ${$dashboard.makemkv_key.key_prefix}` : 'No MakeMKV key detected'}>
-						<div class="h-2 w-2 shrink-0 rounded-full {$dashboard.makemkv_key?.key_present ? ($dashboard.makemkv_key.key_type === 'permanent' ? 'bg-green-500' : 'bg-yellow-500') : 'bg-red-500'}"></div>
+					<div class="flex items-center gap-1.5">
+						<div class="h-2 w-2 shrink-0 rounded-full {$dashboard.makemkv_key_valid === true ? 'bg-green-500' : $dashboard.makemkv_key_valid === false ? 'bg-red-500' : 'bg-gray-400'}"></div>
 						<span class="text-gray-700 dark:text-gray-200">Key</span>
 					</div>
 				</div>
