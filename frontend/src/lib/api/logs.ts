@@ -1,3 +1,8 @@
+export function deleteLog(filename: string): Promise<{ success: boolean }> {
+	return apiFetch(`/api/logs/${encodeURIComponent(filename)}`, {
+		method: 'DELETE'
+	});
+}
 import type { LogContent, LogFile, StructuredLogContent } from '$lib/types/arm';
 import { apiFetch } from './client';
 
