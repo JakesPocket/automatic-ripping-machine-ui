@@ -19,8 +19,8 @@
 	const activeHw = $derived(activePanel === 'ripper' ? (armOnline ? systemInfo : null) : (transcoderOnline ? transcoderInfo : null));
 	const activeStats = $derived(activePanel === 'ripper' ? (armOnline ? systemStats : null) : (transcoderOnline ? transcoderStats : null));
 
-	// Unified theme: blue for ripper, cyan for transcoder
-	const barColor = $derived(activePanel === 'ripper' ? 'bg-blue-500' : 'bg-cyan-500');
+	// Unified theme: blue for ripper, purple for transcoder
+	const barColor = $derived(activePanel === 'ripper' ? 'bg-blue-500' : 'bg-purple-500');
 	function themedBar(percent: number): string {
 		if (percent >= 90) return 'bg-red-500';
 		if (percent >= 70) return 'bg-yellow-500';
