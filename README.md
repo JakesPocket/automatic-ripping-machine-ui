@@ -81,7 +81,7 @@ export GHCR_TOKEN=ghp_your_token_here
 Optional environment overrides:
 
 - `GHCR_OWNER` (default: `jakespocket`)
-- `GHCR_IMAGE_NAME` (default: `arm-ui`)
+- `GHCR_IMAGE_NAME` (default: `automatic-ripping-machine-ui`)
 - `PLATFORMS` (default: `linux/amd64,linux/arm64`)
 - `BUILDX_BUILDER_NAME` (default: `arm-ui-builder`)
 

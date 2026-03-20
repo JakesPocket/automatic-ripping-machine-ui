@@ -18,7 +18,7 @@ if [[ -z "${GHCR_TOKEN:-}" ]]; then
 fi
 
 OWNER="${GHCR_OWNER:-jakespocket}"
-IMAGE_NAME="${GHCR_IMAGE_NAME:-arm-ui}"
+IMAGE_NAME="${GHCR_IMAGE_NAME:-automatic-ripping-machine-ui}"
 IMAGE="ghcr.io/${OWNER,,}/${IMAGE_NAME}"
 VERSION_TAG="$(tr -d '[:space:]' < VERSION)"
 BUILDER_NAME="${BUILDX_BUILDER_NAME:-arm-ui-builder}"
