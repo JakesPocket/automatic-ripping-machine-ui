@@ -3,12 +3,13 @@ import json
 import logging
 import os
 import shutil
+import errno
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 import httpx
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import delete, select, update
 
 from backend.config import settings as app_settings
 from backend.models.arm import Config, Job, SystemDrives, Track
@@ -216,6 +217,55 @@ def _resolve_raw_root() -> Path:
     return Path(str(raw)).resolve()
 
 
+def _resolve_completed_root() -> Path:
+    cfg = arm_db.get_all_config_safe() or {}
+    completed = cfg.get("COMPLETED_PATH") or "/home/arm/media/completed"
+    return Path(str(completed)).resolve()
+
+
+def _delete_path_safe(target: Path, allowed_roots: list[Path], removed: list[str], missing: list[str], errors: list[str]) -> None:
+    resolved = target.resolve()
+    if not any(_path_is_within(resolved, root) for root in allowed_roots):
+        errors.append(f"Skipped outside allowed roots: {resolved}")
+        return
+    if not resolved.exists():
+        missing.append(str(resolved))
+        return
+    try:
+        if resolved.is_dir():
+            shutil.rmtree(resolved)
+        else:
+            resolved.unlink()
+        removed.append(str(resolved))
+    except OSError as exc:
+        if exc.errno == errno.EROFS:
+            errors.append(f"Read-only filesystem: {resolved}")
+        else:
+            errors.append(f"{resolved}: {exc}")
+
+
+def _title_candidates(title: str | None, label: str | None, year: str | None) -> list[str]:
+    base = []
+    for raw in (title, label):
+        if not raw:
+            continue
+        val = raw.strip()
+        if not val:
+            continue
+        base.append(val)
+        base.append(val.replace(" ", "-"))
+    seen = set()
+    out = []
+    for name in base:
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+        if year:
+            out.append(f"{name} ({year})")
+    return out
+
+
 @router.get("/settings/maintenance/failed-jobs")
 async def list_failed_jobs():
     # ARM commonly stores failed rip jobs as "fail" (not "failed").
@@ -269,23 +319,20 @@ async def maintenance_clear_job(body: MaintenanceJobRequest):
 
             title = job.title or job.title_manual or job.title_auto or job.label
 
-            # Clear drive references to this job before delete.
-            for drive in session.scalars(
-                select(SystemDrives).where(
-                    or_(
-                        SystemDrives.job_id_current == body.job_id,
-                        SystemDrives.job_id_previous == body.job_id,
-                    )
-                )
-            ).all():
-                if drive.job_id_current == body.job_id:
-                    drive.job_id_current = None
-                if drive.job_id_previous == body.job_id:
-                    drive.job_id_previous = None
-
-            session.query(Track).filter(Track.job_id == body.job_id).delete(synchronize_session=False)
-            session.query(Config).filter(Config.job_id == body.job_id).delete(synchronize_session=False)
-            session.delete(job)
+            # Direct SQL avoids stale-row ORM assertions when related rows are missing.
+            session.execute(
+                update(SystemDrives)
+                .where(SystemDrives.job_id_current == body.job_id)
+                .values(job_id_current=None)
+            )
+            session.execute(
+                update(SystemDrives)
+                .where(SystemDrives.job_id_previous == body.job_id)
+                .values(job_id_previous=None)
+            )
+            session.execute(delete(Track).where(Track.job_id == body.job_id))
+            session.execute(delete(Config).where(Config.job_id == body.job_id))
+            session.execute(delete(Job).where(Job.job_id == body.job_id))
             session.commit()
     except HTTPException:
         raise
@@ -299,6 +346,7 @@ async def maintenance_clear_job(body: MaintenanceJobRequest):
 async def maintenance_delete_job_logs(body: MaintenanceJobRequest):
     removed: list[str] = []
     missing: list[str] = []
+    errors: list[str] = []
     try:
         with arm_db.get_session() as session:
             job = session.get(Job, body.job_id)
@@ -328,21 +376,20 @@ async def maintenance_delete_job_logs(body: MaintenanceJobRequest):
 
             if not (_path_is_within(resolved, root) or _path_is_within(resolved, progress)):
                 continue
-            if resolved.exists() and resolved.is_file():
-                resolved.unlink()
-                removed.append(str(resolved))
-            else:
-                missing.append(str(resolved))
+            _delete_path_safe(resolved, [root, progress], removed, missing, errors)
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to delete logs: {exc}") from exc
 
-    return {"success": True, "job_id": body.job_id, "removed": removed, "missing": missing}
+    return {"success": len(errors) == 0, "job_id": body.job_id, "removed": removed, "missing": missing, "errors": errors}
 
 
 @router.post("/settings/maintenance/delete-job-raw")
 async def maintenance_delete_job_raw(body: MaintenanceJobRequest):
+    removed: list[str] = []
+    missing: list[str] = []
+    errors: list[str] = []
     try:
         with arm_db.get_session() as session:
             job = session.get(Job, body.job_id)
@@ -350,26 +397,49 @@ async def maintenance_delete_job_raw(body: MaintenanceJobRequest):
                 raise HTTPException(status_code=404, detail=f"Job {body.job_id} not found")
             raw_path = job.raw_path
             title = job.title or job.title_manual or job.title_auto or job.label
+            label = job.label
+            year = job.year or job.year_manual or job.year_auto
 
-        if not raw_path:
-            return {"success": True, "job_id": body.job_id, "deleted": False, "reason": "No raw path recorded"}
+        raw_root = _resolve_raw_root()
+        completed_root = _resolve_completed_root()
+        allowed_roots = [raw_root, completed_root]
 
-        root = _resolve_raw_root()
-        target = Path(raw_path).resolve()
-        if not _path_is_within(target, root):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Raw path is outside RAW_PATH root (raw={target}, root={root})",
-            )
+        if raw_path:
+            _delete_path_safe(Path(raw_path), allowed_roots, removed, missing, errors)
 
-        if target.exists():
-            if target.is_dir():
-                shutil.rmtree(target)
-            else:
-                target.unlink()
-            return {"success": True, "job_id": body.job_id, "deleted": True, "path": str(target), "title": title}
-        return {"success": True, "job_id": body.job_id, "deleted": False, "path": str(target), "reason": "Path not found"}
+        # Also remove common title-based folders in raw and completed/movies.
+        for candidate in _title_candidates(title, label, year):
+            _delete_path_safe(raw_root / candidate, allowed_roots, removed, missing, errors)
+            _delete_path_safe(completed_root / "movies" / candidate, allowed_roots, removed, missing, errors)
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to delete raw output: {exc}") from exc
+
+    return {
+        "success": len(errors) == 0,
+        "job_id": body.job_id,
+        "removed": removed,
+        "missing": missing,
+        "errors": errors,
+        "title": title if "title" in locals() else None,
+    }
+
+
+@router.post("/settings/maintenance/purge-job")
+async def maintenance_purge_job(body: MaintenanceJobRequest):
+    """Best-effort full cleanup: logs + folders + DB row."""
+    logs_result = await maintenance_delete_job_logs(body)
+    folders_result = await maintenance_delete_job_raw(body)
+    db_result = await maintenance_clear_job(body)
+    errors = []
+    errors.extend(logs_result.get("errors", []))
+    errors.extend(folders_result.get("errors", []))
+    return {
+        "success": len(errors) == 0,
+        "job_id": body.job_id,
+        "logs": logs_result,
+        "folders": folders_result,
+        "db": db_result,
+        "errors": errors,
+    }

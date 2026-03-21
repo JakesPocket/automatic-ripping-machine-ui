@@ -108,15 +108,22 @@ export function maintenanceClearJob(jobId: number): Promise<{ success: boolean; 
 	});
 }
 
-export function maintenanceDeleteJobLogs(jobId: number): Promise<{ success: boolean; job_id: number; removed: string[]; missing: string[] }> {
+export function maintenanceDeleteJobLogs(jobId: number): Promise<{ success: boolean; job_id: number; removed: string[]; missing: string[]; errors: string[] }> {
 	return apiFetch('/api/settings/maintenance/delete-job-logs', {
 		method: 'POST',
 		body: JSON.stringify({ job_id: jobId })
 	});
 }
 
-export function maintenanceDeleteJobRaw(jobId: number): Promise<{ success: boolean; job_id: number; deleted: boolean; path?: string; reason?: string; title?: string | null }> {
+export function maintenanceDeleteJobRaw(jobId: number): Promise<{ success: boolean; job_id: number; removed: string[]; missing: string[]; errors: string[]; title?: string | null }> {
 	return apiFetch('/api/settings/maintenance/delete-job-raw', {
+		method: 'POST',
+		body: JSON.stringify({ job_id: jobId })
+	});
+}
+
+export function maintenancePurgeJob(jobId: number): Promise<{ success: boolean; job_id: number; errors: string[] }> {
+	return apiFetch('/api/settings/maintenance/purge-job', {
 		method: 'POST',
 		body: JSON.stringify({ job_id: jobId })
 	});

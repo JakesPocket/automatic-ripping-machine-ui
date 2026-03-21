@@ -12,7 +12,8 @@
 		maintenanceRescanDrives,
 		maintenanceClearJob,
 		maintenanceDeleteJobLogs,
-		maintenanceDeleteJobRaw
+		maintenanceDeleteJobRaw,
+		maintenancePurgeJob
 	} from '$lib/api/settings';
 	import type { ConnectionTestResult, WebhookTestResult, SystemInfoData, FailedJobSummary } from '$lib/api/settings';
 	import type { SettingsData, Drive } from '$lib/types/arm';
@@ -112,7 +113,9 @@
 		maintenanceFeedback = null;
 		try {
 			await action();
-			maintenanceFeedback = { type: 'success', message: successMessage };
+			if (!maintenanceFeedback) {
+				maintenanceFeedback = { type: 'success', message: successMessage };
+			}
 			await loadFailedJobs();
 			await drives.refresh();
 		} catch (e) {
@@ -133,7 +136,9 @@
 		if (!selected) return;
 		if (!confirm(`Delete logs for job #${selected.job_id}?`)) return;
 		await runMaintenanceAction(async () => {
-			await maintenanceDeleteJobLogs(selected.job_id);
+			const res = await maintenanceDeleteJobLogs(selected.job_id);
+			const details = [`Removed: ${res.removed.length}`, `Missing: ${res.missing.length}`, `Errors: ${res.errors.length}`].join(' · ');
+			maintenanceFeedback = { type: res.errors.length ? 'error' : 'success', message: `Logs cleanup #${selected.job_id} · ${details}` };
 		}, `Deleted logs for job #${selected.job_id}`);
 	}
 
@@ -142,7 +147,9 @@
 		if (!selected) return;
 		if (!confirm(`Delete raw output for job #${selected.job_id}? This cannot be undone.`)) return;
 		await runMaintenanceAction(async () => {
-			await maintenanceDeleteJobRaw(selected.job_id);
+			const res = await maintenanceDeleteJobRaw(selected.job_id);
+			const details = [`Removed: ${res.removed.length}`, `Missing: ${res.missing.length}`, `Errors: ${res.errors.length}`].join(' · ');
+			maintenanceFeedback = { type: res.errors.length ? 'error' : 'success', message: `Folder cleanup #${selected.job_id} · ${details}` };
 		}, `Deleted raw output for job #${selected.job_id}`);
 	}
 
@@ -153,6 +160,21 @@
 		await runMaintenanceAction(async () => {
 			await maintenanceClearJob(selected.job_id);
 		}, `Cleared failed job #${selected.job_id} from database`);
+	}
+
+	async function handleMaintenanceFullCleanup() {
+		const selected = selectedFailedJob();
+		if (!selected) return;
+		if (!confirm(`Run FULL cleanup for job #${selected.job_id}? This will try logs + raw/completed folders + DB entry.`)) return;
+		await runMaintenanceAction(async () => {
+			const res = await maintenancePurgeJob(selected.job_id);
+			maintenanceFeedback = {
+				type: res.errors.length ? 'error' : 'success',
+				message: res.errors.length
+					? `Full cleanup #${selected.job_id} completed with ${res.errors.length} error(s)`
+					: `Full cleanup #${selected.job_id} completed`
+			};
+		}, `Full cleanup finished for job #${selected.job_id}`);
 	}
 
 	onMount(() => {
@@ -1860,7 +1882,7 @@
 
 					<div class="rounded-lg border border-primary/20 bg-surface p-4 shadow-xs dark:border-primary/20 dark:bg-surface-dark">
 						<h3 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Failed Job Cleanup</h3>
-						<p class="mb-3 text-xs text-gray-500 dark:text-gray-400">Use these in order: logs/raw cleanup first, then clear DB row if needed.</p>
+						<p class="mb-3 text-xs text-gray-500 dark:text-gray-400">Detailed cleanup supports logs + raw + completed/movie folders + DB row removal.</p>
 						<div class="flex flex-wrap gap-2">
 							<button
 								type="button"
@@ -1876,7 +1898,7 @@
 								disabled={maintenanceBusy || failedJobs.length === 0}
 								class="rounded-lg px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-800"
 							>
-								Delete Raw Output
+								Delete Raw + Completed Folders
 							</button>
 							<button
 								type="button"
@@ -1885,6 +1907,14 @@
 								class="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
 							>
 								Clear Job DB Entry
+							</button>
+							<button
+								type="button"
+								onclick={handleMaintenanceFullCleanup}
+								disabled={maintenanceBusy || failedJobs.length === 0}
+								class="rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+							>
+								Full Cleanup (All)
 							</button>
 						</div>
 					</div>
