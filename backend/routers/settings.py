@@ -218,7 +218,8 @@ def _resolve_raw_root() -> Path:
 
 @router.get("/settings/maintenance/failed-jobs")
 async def list_failed_jobs():
-    failed_statuses = {"failed", "error", "cancelled", "abandoned"}
+    # ARM commonly stores failed rip jobs as "fail" (not "failed").
+    failed_statuses = {"fail", "failed", "error", "cancelled", "canceled", "abandoned"}
     rows = []
     try:
         with arm_db.get_session() as session:
