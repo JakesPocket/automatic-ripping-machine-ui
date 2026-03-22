@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'
     tags:
       - 'v*'
+      - 'feature-*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
