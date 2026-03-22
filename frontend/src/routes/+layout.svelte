@@ -182,7 +182,7 @@
 				{/if}
 				<!-- Commit label -->
 				<div class="ml-4 flex items-center">
-					<span class="inline-flex items-center rounded bg-green-500 px-2 py-0.5 text-xs font-semibold text-white" title="Current commit hash">commit: 0d2b239</span>
+					<span class="inline-flex items-center rounded bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-100" title="Current commit hash">commit: 0d2b239</span>
 				</div>
 			</div>
 
