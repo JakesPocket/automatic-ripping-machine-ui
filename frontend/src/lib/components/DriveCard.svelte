@@ -108,6 +108,9 @@
 		{#if drive.mount}
 			<p class="font-mono text-xs">{drive.mount}</p>
 		{/if}
+		{#if drive.disc_label}
+			<p class="text-xs text-primary-text dark:text-primary-text-dark">Disc Label: {drive.disc_label}</p>
+		{/if}
 	</div>
 
 	<div class="mt-3 flex flex-wrap gap-1.5">

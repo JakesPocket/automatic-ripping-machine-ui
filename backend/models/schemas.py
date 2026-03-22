@@ -158,6 +158,7 @@ class DriveSchema(BaseModel):
     serial_id: str | None = None
     uhd_capable: bool | None = None
     current_job: JobSchema | None = None
+    disc_label: str | None = None
 
     model_config = {"from_attributes": True}
 

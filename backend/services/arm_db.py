@@ -240,6 +240,12 @@ def get_drives() -> list[SystemDrives]:
 def get_drives_with_jobs() -> list[dict]:
     """Return drives with their current job info attached."""
     try:
+        from arm.services.drives import drives_search
+        # Build a lookup of live drive info by mount and serial_id
+        live_drives = list(drives_search())
+        live_by_mount = {getattr(d, 'mount', None): d for d in live_drives if getattr(d, 'mount', None)}
+        live_by_serial = {getattr(d, 'serial_id', None): d for d in live_drives if getattr(d, 'serial_id', None)}
+
         with get_session() as session:
             drives = list(session.scalars(select(SystemDrives)).all())
             result = []
@@ -248,6 +254,12 @@ def get_drives_with_jobs() -> list[dict]:
                     col.name: getattr(drive, col.name)
                     for col in SystemDrives.__table__.columns
                 }
+                # Try to find a live drive by mount or serial_id
+                live = live_by_mount.get(drive.mount) or live_by_serial.get(drive.serial_id)
+                if live and hasattr(live, 'disc_label'):
+                    drive_dict['disc_label'] = getattr(live, 'disc_label', None)
+                else:
+                    drive_dict['disc_label'] = None
                 current_job = None
                 if drive.job_id_current:
                     job = session.get(Job, drive.job_id_current)
