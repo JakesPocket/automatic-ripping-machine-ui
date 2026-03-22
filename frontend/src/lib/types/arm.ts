@@ -122,6 +122,7 @@ export interface Drive {
 	serial_id: string | null;
 	uhd_capable: boolean | null;
 	current_job: Job | null;
+	disc_label?: string | null;
 }
 
 export interface Notification {
