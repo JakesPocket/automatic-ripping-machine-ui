@@ -3,7 +3,7 @@ name: Build and Push to GHCR
 on:
   workflow_dispatch:
   push:
-    branch:
+    branches:
       - main
       - feature*
 
